@@ -46,7 +46,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_minutes, scoring_metric, run_nickname):
+def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
 
     # get flares
     client, flares_table = tc.connect_to_flares_db()
@@ -116,7 +116,11 @@ def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_m
 
         train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
 
-        train_x, test_x = tc.impute_variable_data(train_x, test_x)
+        if nan_removal_strategy == "linear_interpolation":
+            train_x = tc.linear_interpolation(train_x, minutes_since_start)
+            test_x = tc.linear_interpolation(test_x, minutes_since_start)
+        else:
+            train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
         train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
                            "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
@@ -248,7 +252,8 @@ if __name__ == "__main__":
         parser.add_argument("-t", type=int, help="Removes all flares from dataset that are greater than X minutes from their peak")
         parser.add_argument("-s", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for")
         parser.add_argument("-e", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for. One less than this will be the final timestamp run")
-        parser.add_argument("-m", type=str, help="Sklearn scoring metric to use")
+        parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
+        parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
@@ -262,10 +267,12 @@ if __name__ == "__main__":
         peak_filtering_threshold_minutes = -10000
         start_time_minutes = 10
         end_time_minutes = 25  # make this one more than what will run
+        nan_removal_strategy = "linear_interpolation"
         scoring_metric = "f1"
         run_nickname = "argparsetest"
         grid_search(peak_filtering_threshold_minutes,
                     start_time_minutes,
                     end_time_minutes,
+                    nan_removal_strategy,
                     scoring_metric,
                     run_nickname)

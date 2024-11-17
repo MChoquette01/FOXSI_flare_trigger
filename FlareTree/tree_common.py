@@ -64,9 +64,26 @@ def get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes
     return train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y
 
 
-def impute_variable_data(train_x, test_x):
+def linear_interpolation(input_data, minutes_since_start):
+    """Linearly interpolates missing data in <input_data>. Uses lookup tables created by imputer.py"""
 
-    imp = SimpleImputer(missing_values=np.nan, strategy='mean')
+    for column_name in input_data.columns:
+        col = input_data[column_name]
+        if col.isna().sum() != 0:
+            lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
+            with open(lookup_table_path, "rb") as f:
+                lookup_table = pickle.load(f)
+            for nan_idx in col[col.isnull()].index.to_list():
+                # The ROWS in training/test data are each flare idx, and correspond to the COLUMNS of the lookup table
+                # The ROWS in the lookup table are the number of minutes since the start of the FITS file
+                col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx]
+
+    return input_data
+
+
+def impute_variable_data(train_x, test_x, strategy):
+
+    imp = SimpleImputer(missing_values=np.nan, strategy=strategy)
     imp.fit(train_x.values)
     train_x = pd.DataFrame(imp.transform(train_x.values), dtype=np.float64)
     test_x = pd.DataFrame(imp.transform(test_x.values), dtype=np.float64)
@@ -85,6 +102,22 @@ def create_tree_from_df(grid_search_results, minutes_since_start, max_depth_over
                                min_samples_split=int(relevant_row.min_samples_split.iloc[0]),
                                min_weight_fraction_leaf=float(relevant_row.min_weight_fraction_leaf.iloc[0]),
                                class_weight=relevant_row.class_weight.iloc[0],
+                               ccp_alpha=ccp_alpha,
+                               random_state=RANDOM_STATE)
+
+    return t
+
+
+def create_tree(criterion, max_depth, max_features, min_samples_leaf, min_samples_split, min_weight_fraction_leaf, ccp_alpha):
+    """Creates a tree from a DataFrame of best parameters for each timestamp"""
+
+    t = DecisionTreeClassifier(criterion=criterion,
+                               max_depth=max_depth,
+                               max_features=max_features,
+                               min_samples_leaf=min_samples_leaf,
+                               min_samples_split=min_samples_split,
+                               min_weight_fraction_leaf=min_weight_fraction_leaf,
+                               class_weight='balanced',
                                ccp_alpha=ccp_alpha,
                                random_state=RANDOM_STATE)
 
