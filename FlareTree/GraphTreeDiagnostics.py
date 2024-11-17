@@ -140,10 +140,10 @@ def make_confusion_matrix(results, minutes_since_start, peak_filtering_minutes):
     ax[0].set_ylabel(["True Label"], fontsize=14)
     ax[1].set_ylabel(["True Label"], fontsize=14)
     plt.rcParams.update({'font.size': 16})
-    plt.tight_layout()
-    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["Small Flare", "Big Flare"]).plot(ax=ax[0])
-    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["Small Flare", "Big Flare"]).plot(ax=ax[1])
+    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
     fig.suptitle(f"Flares {minutes_since_start - 15} minutes since start", fontsize=24)
+    plt.tight_layout()
     fig.savefig(os.path.join(out_dir, f"ConfusionMatrices_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
 
@@ -190,11 +190,11 @@ def graph_flare_count(results):
     plt.xlabel("Minutes Since Start")
     plt.title("Count of Flares")
     plt.legend()
-    plt.savefig(os.path.join("Analysis", "FlareCount.png"))
+    plt.savefig(os.path.join(out_dir, "FlareCount.png"))
     # plt.show()
 
 
-results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_no_peak_filtering\results.pkl"
+results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_filter_past_peak_flares\results.pkl"
 peak_filtering_minutes = 0
 
 with open(results_filepath, "rb") as f:

@@ -8,7 +8,7 @@ from sklearn.metrics import confusion_matrix, f1_score, balanced_accuracy_score
 import numpy as np
 
 
-def make_confusion_matrix(t, train_x, train_y, test_x, test_y, minutes_since_start, max_depth=None):
+def make_confusion_matrix(out_dir, t, train_x, train_y, test_x, test_y, minutes_since_start, max_depth=None, ccp_alpha=None):
     """Create training and test confusion matrices"""
 
     test_predictions = t.predict(test_x)
@@ -27,13 +27,15 @@ def make_confusion_matrix(t, train_x, train_y, test_x, test_y, minutes_since_sta
     ax[0].set_ylabel(["True Label"], fontsize=14)
     ax[1].set_ylabel(["True Label"], fontsize=14)
     plt.rcParams.update({'font.size': 16})
-    plt.tight_layout()
-    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["Small Flare", "Big Flare"]).plot(ax=ax[0])
-    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["Small Flare", "Big Flare"]).plot(ax=ax[1])
+    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
     if max_depth is not None:
         fig.suptitle(f"Flares {minutes_since_start - 15} minutes since start, Max Depth: {max_depth}")
+    elif ccp_alpha is not None:
+        fig.suptitle(f"Flares {minutes_since_start - 15} minutes since start, CCP Alpha: {ccp_alpha}")
     else:
         fig.suptitle(f"Flares {minutes_since_start - 15} minutes since start")
+    plt.tight_layout()
     fig.savefig(os.path.join(out_dir, f"ConfusionMatrices_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
 
@@ -50,6 +52,11 @@ def prune_index(inner_tree, index, threshold):
 
 
 def prune_ccp_alphas(peak_filtering_minutes):
+
+    out_dir = os.path.join(os.path.split(results_filepath)[0], "Pruning", "CCP Alpha")
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
+
     # ccp pruning
     for timestamp in results.minutes_since_start.tolist():
         # get data
@@ -64,7 +71,7 @@ def prune_ccp_alphas(peak_filtering_minutes):
         train_cm = confusion_matrix(train_y, train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
         train_f1 = f1_score(train_y, train_predictions)
-        make_confusion_matrix(t, train_x, test_x, int(timestamp))
+        make_confusion_matrix(out_dir, t, train_x, train_y, test_x, test_y, int(timestamp))
 
         best_f1 = train_f1
         best_alpha = None
@@ -72,6 +79,8 @@ def prune_ccp_alphas(peak_filtering_minutes):
         path = t.cost_complexity_pruning_path(train_x, train_y)
         ccp_alphas, impurities = path.ccp_alphas, path.impurities
         for alpha in ccp_alphas:
+            if alpha < 0:
+                continue
             t_pruned = tc.create_tree_from_df(results, int(timestamp), ccp_alpha=alpha)
             t_pruned.fit(train_x, train_y)
             pruned_test_predictions = t_pruned.predict(test_x.values)
@@ -84,10 +93,15 @@ def prune_ccp_alphas(peak_filtering_minutes):
                     best_f1 = pruned_train_f1
                     best_alpha = alpha
         print(f"Timestamp: {timestamp}: Best alpha: {best_alpha} with an F1 of {best_f1}, an increase of {best_f1 - train_f1}")
-        make_confusion_matrix(t_pruned, train_x, train_y, test_x, test_y, int(timestamp))
+        make_confusion_matrix(out_dir, t_pruned, train_x, train_y, test_x, test_y, int(timestamp), ccp_alpha=best_alpha)
 
 
 def prune_max_depth(peak_filtering_minutes):
+
+    out_dir = os.path.join(os.path.split(results_filepath)[0], "Pruning", "Max Depth")
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
+
     for timestamp in results.minutes_since_start.tolist():
         # get data
         train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
@@ -122,12 +136,12 @@ def prune_max_depth(peak_filtering_minutes):
                     best_f1 = pruned_train_f1
                     best_max_depth = int(results.max_depth.iloc[0]) - layer
         print(f"Timestamp: {timestamp}: Best max depth: {best_max_depth} with an F1 of {best_f1}, an increase of {best_f1 - train_f1}")
-        make_confusion_matrix(t_pruned, train_x, train_y, test_x, test_y, int(timestamp), max_depth=best_max_depth)
+        make_confusion_matrix(out_dir, t_pruned, train_x, train_y, test_x, test_y, int(timestamp), max_depth=best_max_depth)
 
 
 if __name__ == "__main__":
 
-    results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_no_peak_filtering\results.pkl"
+    results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_filter_past_peak_flares\results.pkl"
     peak_filtering_minutes = 0
 
     out_dir = os.path.join(os.path.split(results_filepath)[0], "Pruning")
@@ -138,3 +152,4 @@ if __name__ == "__main__":
         results = pickle.load(f)
 
     prune_max_depth(peak_filtering_minutes)
+    prune_ccp_alphas(peak_filtering_minutes)
