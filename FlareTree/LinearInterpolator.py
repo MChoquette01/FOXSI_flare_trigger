@@ -5,6 +5,8 @@ from tqdm import tqdm
 from collections import defaultdict
 import os
 import pickle
+import sys
+import argparse
 
 """Create DataFrames that act as lookup tables for a given timestamp/flare when interpolating linearly to fill NaNs"""
 
@@ -97,5 +99,12 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
 
 if __name__ == "__main__":
 
-    for timestamp in range(-5, 4, 1):
-        create_interpolated_table_for_timestamp(minutes_since_flare_start=timestamp)
+    # running from MSI/Slurm, or CMD line, if you really want to
+    if len(sys.argv) > 1:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("-t", type=int, help="Timestamp relative to start of flare to interpolate for")
+        args = parser.parse_args()
+        create_interpolated_table_for_timestamp(minutes_since_flare_start=args.t)
+    else:
+        for timestamp in range(-5, 4, 1):
+            create_interpolated_table_for_timestamp(minutes_since_flare_start=timestamp)
