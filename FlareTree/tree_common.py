@@ -68,15 +68,16 @@ def linear_interpolation(input_data, minutes_since_start):
     """Linearly interpolates missing data in <input_data>. Uses lookup tables created by imputer.py"""
 
     for column_name in input_data.columns:
-        col = input_data[column_name]
-        if col.isna().sum() != 0:
-            lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
-            with open(lookup_table_path, "rb") as f:
-                lookup_table = pickle.load(f)
-            for nan_idx in col[col.isnull()].index.to_list():
-                # The ROWS in training/test data are each flare idx, and correspond to the COLUMNS of the lookup table
-                # The ROWS in the lookup table are the number of minutes since the start of the FITS file
-                col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx]
+        if column_name != "FlareID" and column_name != "IsC5OrHigher":
+            col = input_data[column_name]
+            if col.isna().sum() != 0:
+                lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
+                with open(lookup_table_path, "rb") as f:
+                    lookup_table = pickle.load(f)
+                for nan_idx in col[col.isnull()].index.to_list():
+                    # The ROWS in training/test data are each flare idx, and correspond to the COLUMNS of the lookup table
+                    # The ROWS in the lookup table are the number of minutes since the start of the FITS file
+                    col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx]
 
     return input_data
 

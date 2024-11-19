@@ -114,12 +114,12 @@ def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_m
         with open(out_path, "rb") as f:
             tree_data = pickle.load(f)
 
+        if nan_removal_strategy == "linear_interpolation":
+            tree_data = tc.linear_interpolation(tree_data, minutes_since_start)
+
         train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
 
-        if nan_removal_strategy == "linear_interpolation":
-            train_x = tc.linear_interpolation(train_x, minutes_since_start)
-            test_x = tc.linear_interpolation(test_x, minutes_since_start)
-        else:
+        if nan_removal_strategy != "linear_interpolation":
             train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
         train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
