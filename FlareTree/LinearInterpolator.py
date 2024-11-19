@@ -1,7 +1,6 @@
 import tree_common as tc
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from collections import defaultdict
 import os
 import pickle
@@ -44,19 +43,10 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
     client, flares_table = tc.connect_to_flares_db()
     # get unique flare IDs
     flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': f'_{minutes_since_flare_start + 15}$'}})]
-    for flare_id in tqdm(flare_ids):
+    for flare_id in flare_ids:
         this_record = defaultdict(list)
-        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_'}}, {"FlareID": 1,
-                                                                              "Temperature": 1,
-                                                                              "Temperature1MinuteDifference": 1,
-                                                                              "Temperature3MinuteDifference": 1,
-                                                                              "Temperature5MinuteDifference": 1,
-                                                                              "EmissionMeasure": 1,
-                                                                              "EmissionMeasure1MinuteDifference": 1,
-                                                                              "EmissionMeasure3MinuteDifference": 1,
-                                                                              "EmissionMeasure5MinuteDifference": 1,
-                                                                              "CurrentXRSA": 1,
-                                                                              "CurrentXRSB": 1})
+        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_'}}, {"XRSARemaining": 0,
+                                                                              "XRSBRemaining": 0})
 
         for flare_entry in cursor:
             # make a list of all records from this flare
@@ -71,6 +61,12 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
             this_record["EmissionMeasure5MinuteDifference"].append(flare_entry["EmissionMeasure5MinuteDifference"])
             this_record["CurrentXRSA"].append(flare_entry["CurrentXRSA"])
             this_record["CurrentXRSB"].append(flare_entry["CurrentXRSB"])
+            this_record["XRSA1MinuteDifference"].append(flare_entry["XRSA1MinuteDifference"])
+            this_record["XRSA3MinuteDifference"].append(flare_entry["XRSA3MinuteDifference"])
+            this_record["XRSA5MinuteDifference"].append(flare_entry["XRSA5MinuteDifference"])
+            this_record["XRSB1MinuteDifference"].append(flare_entry["XRSB1MinuteDifference"])
+            this_record["XRSB3MinuteDifference"].append(flare_entry["XRSB3MinuteDifference"])
+            this_record["XRSB5MinuteDifference"].append(flare_entry["XRSB5MinuteDifference"])
         # add this flare's values to the running list
         uninterpolated_values["Temperature"].append(this_record["Temperature"])
         uninterpolated_values["Temperature1MinuteDifference"].append(this_record["Temperature1MinuteDifference"])
@@ -82,6 +78,12 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
         uninterpolated_values["EmissionMeasure5MinuteDifference"].append(this_record["EmissionMeasure5MinuteDifference"])
         uninterpolated_values["CurrentXRSA"].append(this_record["CurrentXRSA"])
         uninterpolated_values["CurrentXRSB"].append(this_record["CurrentXRSB"])
+        uninterpolated_values["XRSA1MinuteDifference"].append(this_record["XRSA1MinuteDifference"])
+        uninterpolated_values["XRSA3MinuteDifference"].append(this_record["XRSA3MinuteDifference"])
+        uninterpolated_values["XRSA5MinuteDifference"].append(this_record["XRSA5MinuteDifference"])
+        uninterpolated_values["XRSB1MinuteDifference"].append(this_record["XRSB1MinuteDifference"])
+        uninterpolated_values["XRSB3MinuteDifference"].append(this_record["XRSB3MinuteDifference"])
+        uninterpolated_values["XRSB5MinuteDifference"].append(this_record["XRSB5MinuteDifference"])
     client.close()
 
     # do the actual interpolating
@@ -95,6 +97,12 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
     do_interpolate(uninterpolated_values["EmissionMeasure5MinuteDifference"], flare_ids, "EmissionMeasure5MinuteDifference", minutes_since_flare_start)
     do_interpolate(uninterpolated_values["CurrentXRSA"], flare_ids, "CurrentXRSA", minutes_since_flare_start)
     do_interpolate(uninterpolated_values["CurrentXRSB"], flare_ids, "CurrentXRSB", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSA1MinuteDifference"], flare_ids, "XRSA1MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSA3MinuteDifference"], flare_ids, "XRSA3MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSA5MinuteDifference"], flare_ids, "XRSA5MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSB1MinuteDifference"], flare_ids, "XRSB1MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSB3MinuteDifference"], flare_ids, "XRSB3MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["XRSB5MinuteDifference"], flare_ids, "XRSB5MinuteDifference", minutes_since_flare_start)
 
 
 if __name__ == "__main__":
