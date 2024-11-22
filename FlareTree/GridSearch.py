@@ -49,14 +49,14 @@ class Flare:
 def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
 
     # get flares
-    client, flares_table = tc.connect_to_flares_db()
+    # client, flares_table = tc.connect_to_flares_db()
 
-    parsed_flares = []
-    all_entries = flares_table.find({})
-    for record in all_entries:
-        parsed_flares.append(Flare(record))
-
-    client.close()
+    # parsed_flares = []
+    # all_entries = flares_table.find({})
+    # for record in all_entries:
+    #     parsed_flares.append(Flare(record))
+    #
+    # client.close()
 
     run_nickname = f'{datetime.now().strftime("%d_%m_%Y")}_{run_nickname}'
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
