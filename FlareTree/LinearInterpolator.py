@@ -20,7 +20,7 @@ def pad_list(datum_list):
     return datum_list
 
 
-def do_interpolate(to_interpolate, flare_ids, variable_name, minutes_since_flare_start):
+def do_interpolate(to_interpolate, flare_ids, variable_name):
 
     x = pad_list(to_interpolate)
     x = pd.DataFrame(np.array(x), dtype=np.float64).T
@@ -30,19 +30,16 @@ def do_interpolate(to_interpolate, flare_ids, variable_name, minutes_since_flare
     if not os.path.exists("Interpolations"):
         os.mkdir("Interpolations")
 
-    if not os.path.exists(os.path.join("Interpolations", f"{minutes_since_flare_start}_minutes_since_start")):
-        os.mkdir(os.path.join("Interpolations", f"{minutes_since_flare_start}_minutes_since_start"))
-
-    with open(os.path.join("Interpolations", f"{minutes_since_flare_start}_minutes_since_start", f"{variable_name}.pkl"), "wb") as f:
+    with open(os.path.join("Interpolations", f"{variable_name}.pkl"), "wb") as f:
         pickle.dump(x, f)
 
 
-def create_interpolated_table_for_timestamp(minutes_since_flare_start):
+def create_interpolated_table_for_timestamp():
 
     uninterpolated_values = defaultdict(list)
     client, flares_table = tc.connect_to_flares_db()
     # get unique flare IDs
-    flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': f'_{minutes_since_flare_start + 15}$'}})]
+    flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
     for flare_id in flare_ids:
         this_record = defaultdict(list)
         cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_'}}, {"XRSARemaining": 0,
@@ -87,32 +84,24 @@ def create_interpolated_table_for_timestamp(minutes_since_flare_start):
     client.close()
 
     # do the actual interpolating
-    do_interpolate(uninterpolated_values["Temperature"], flare_ids, "Temperature", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["Temperature1MinuteDifference"], flare_ids, "Temperature1MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["Temperature3MinuteDifference"], flare_ids, "Temperature3MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["Temperature5MinuteDifference"], flare_ids, "Temperature5MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["EmissionMeasure"], flare_ids, "EmissionMeasure", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["EmissionMeasure1MinuteDifference"], flare_ids, "EmissionMeasure1MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["EmissionMeasure3MinuteDifference"], flare_ids, "EmissionMeasure3MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["EmissionMeasure5MinuteDifference"], flare_ids, "EmissionMeasure5MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["CurrentXRSA"], flare_ids, "CurrentXRSA", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["CurrentXRSB"], flare_ids, "CurrentXRSB", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSA1MinuteDifference"], flare_ids, "XRSA1MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSA3MinuteDifference"], flare_ids, "XRSA3MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSA5MinuteDifference"], flare_ids, "XRSA5MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSB1MinuteDifference"], flare_ids, "XRSB1MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSB3MinuteDifference"], flare_ids, "XRSB3MinuteDifference", minutes_since_flare_start)
-    do_interpolate(uninterpolated_values["XRSB5MinuteDifference"], flare_ids, "XRSB5MinuteDifference", minutes_since_flare_start)
+    do_interpolate(uninterpolated_values["Temperature"], flare_ids, "Temperature")
+    do_interpolate(uninterpolated_values["Temperature1MinuteDifference"], flare_ids, "Temperature1MinuteDifference")
+    do_interpolate(uninterpolated_values["Temperature3MinuteDifference"], flare_ids, "Temperature3MinuteDifference")
+    do_interpolate(uninterpolated_values["Temperature5MinuteDifference"], flare_ids, "Temperature5MinuteDifference")
+    do_interpolate(uninterpolated_values["EmissionMeasure"], flare_ids, "EmissionMeasure")
+    do_interpolate(uninterpolated_values["EmissionMeasure1MinuteDifference"], flare_ids, "EmissionMeasure1MinuteDifference")
+    do_interpolate(uninterpolated_values["EmissionMeasure3MinuteDifference"], flare_ids, "EmissionMeasure3MinuteDifference")
+    do_interpolate(uninterpolated_values["EmissionMeasure5MinuteDifference"], flare_ids, "EmissionMeasure5MinuteDifference")
+    do_interpolate(uninterpolated_values["CurrentXRSA"], flare_ids, "CurrentXRSA")
+    do_interpolate(uninterpolated_values["CurrentXRSB"], flare_ids, "CurrentXRSB")
+    do_interpolate(uninterpolated_values["XRSA1MinuteDifference"], flare_ids, "XRSA1MinuteDifference")
+    do_interpolate(uninterpolated_values["XRSA3MinuteDifference"], flare_ids, "XRSA3MinuteDifference")
+    do_interpolate(uninterpolated_values["XRSA5MinuteDifference"], flare_ids, "XRSA5MinuteDifference")
+    do_interpolate(uninterpolated_values["XRSB1MinuteDifference"], flare_ids, "XRSB1MinuteDifference")
+    do_interpolate(uninterpolated_values["XRSB3MinuteDifference"], flare_ids, "XRSB3MinuteDifference")
+    do_interpolate(uninterpolated_values["XRSB5MinuteDifference"], flare_ids, "XRSB5MinuteDifference")
 
 
 if __name__ == "__main__":
 
-    # running from MSI/Slurm, or CMD line, if you really want to
-    if len(sys.argv) > 1:
-        parser = argparse.ArgumentParser()
-        parser.add_argument("-t", type=int, help="Timestamp relative to start of flare to interpolate for")
-        args = parser.parse_args()
-        create_interpolated_table_for_timestamp(minutes_since_flare_start=args.t)
-    else:
-        for timestamp in range(-5, 4, 1):
-            create_interpolated_table_for_timestamp(minutes_since_flare_start=timestamp)
+    create_interpolated_table_for_timestamp()

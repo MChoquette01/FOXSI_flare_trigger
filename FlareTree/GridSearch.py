@@ -138,12 +138,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
               "class_weight": ["balanced"]}
 
     # Real deal parameters
-    # params = {"criterion": ['gini', 'entropy', 'log_loss'],
+    # params = {"criterion": ['gini', 'entropy'],
     #           "max_depth": [x for x in range(10, 21)],
     #           "min_samples_split": [x * 5 for x in range(1, 11)],
     #           "min_samples_leaf": [x * 5 for x in range(1, 11)],
     #           "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-    #           "max_features": [x for x in range(5, 17)]}
+    #           "max_features": [x for x in range(5, 17)],
+    #           "class_weight": ["balanced"]}
 
     # fun with custom scoring functions!
     def false_positive_scorer(y_true, y_predicted):
@@ -237,6 +238,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"results_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(results, f)
 
+    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"grid_{time_minutes}.pkl"), "wb") as f:
+        pickle.dump(params, f)
+
 
 if __name__ == "__main__":
 
@@ -250,7 +254,7 @@ if __name__ == "__main__":
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
-                    start_time_minutes=args.s,
+                    time_minutes=args.s,
                     nan_removal_strategy=args.i,
                     scoring_metric=args.m,
                     run_nickname=args.n)
