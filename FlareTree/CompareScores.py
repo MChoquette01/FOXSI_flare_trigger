@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import os
-import pickle
+import tree_common as tc
 
 # Script to compare metrics from two decision tree grid searches
 
@@ -43,18 +43,14 @@ def make_metric_plot(old_results, new_results):
 
 root_dir = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
 old_version_nickname = "F1_filter_past_peak_flares"
-new_version_nickname = "F1_no_peak_filtering"
+new_version_nickname = "20_11_2024_interpolation_f1_peak_filter_0"
 
-old_results_filepath = os.path.join(root_dir, old_version_nickname, "results.pkl")
-new_results_filepath = os.path.join(root_dir, new_version_nickname, "results.pkl")
+new_results_folderpath = os.path.join(root_dir, new_version_nickname)
 
-with open(old_results_filepath, "rb") as f:
-    old_results = pickle.load(f)
+old_results = tc.get_results_pickle(root_dir, old_version_nickname)
+new_results = tc.get_results_pickle(root_dir, new_version_nickname)
 
-with open(new_results_filepath, "rb") as f:
-    new_results = pickle.load(f)
-
-out_dir = os.path.join(os.path.split(new_results_filepath)[0], "Comparison")
+out_dir = os.path.join(new_results_folderpath, "Comparison")
 if not os.path.exists(out_dir):
     os.mkdir(out_dir)
 

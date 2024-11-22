@@ -251,7 +251,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     start_time_minutes=args.s,
-                    end_time_minutes=args.e,
+                    nan_removal_strategy=args.i,
                     scoring_metric=args.m,
                     run_nickname=args.n)
 

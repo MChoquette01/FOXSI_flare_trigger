@@ -108,6 +108,18 @@ def merge_results_files(run_nickname):
     return all_results
 
 
+def get_results_pickle(results_folderpath, run_nickname):
+
+    all_results_filepath = os.path.join(results_folderpath, run_nickname, "results.pkl")
+    if os.path.exists(all_results_filepath):
+        with open(all_results_filepath, "rb") as f:
+            results = pickle.load(f)
+    else:
+        results = merge_results_files(run_nickname)
+        with open(all_results_filepath, "wb") as f:
+            pickle.dump(results, f)
+
+    return results
 
 
 def create_tree_from_df(grid_search_results, minutes_since_start, max_depth_override=None, ccp_alpha=0.0):

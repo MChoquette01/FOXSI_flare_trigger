@@ -225,14 +225,14 @@ def get_science_goals_accuracy(test_x_flare_ids, test_x, test_y, minutes_since_s
     print(results)
 
 
-results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\results.pkl"
+results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
+run_nickname = ""
 
-out_dir = os.path.join(os.path.split(results_filepath)[0], "Analysis")
+out_dir = os.path.join(results_folderpath, "Analysis")
 if not os.path.exists(out_dir):
     os.mkdir(out_dir)
 
-with open(results_filepath, "rb") as f:
-    results = pickle.load(f)
+results = tc.get_results_pickle(results_folderpath, run_nickname)
 
 for timestamp in results.minutes_since_start.tolist()[:1]:
     t = tc.create_tree_from_df(results, int(timestamp))
