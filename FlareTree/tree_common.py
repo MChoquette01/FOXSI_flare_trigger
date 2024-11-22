@@ -77,7 +77,10 @@ def linear_interpolation(input_data, minutes_since_start):
                 for nan_idx in col[col.isnull()].index.to_list():
                     # The ROWS in training/test data are each flare idx, and correspond to the COLUMNS of the lookup table
                     # The ROWS in the lookup table are the number of minutes since the start of the FITS file
-                    col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx]
+                    if "EmissionMeasure" not in column_name:
+                        col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx]
+                    else:
+                        col[nan_idx] = lookup_table.iloc[minutes_since_start, nan_idx] / (10 ** 30)
 
     return input_data
 
@@ -90,6 +93,21 @@ def impute_variable_data(train_x, test_x, strategy):
     test_x = pd.DataFrame(imp.transform(test_x.values), dtype=np.float64)
 
     return train_x, test_x
+
+
+def merge_results_files(run_nickname):
+
+    all_results = pd.DataFrame()
+    for root, dirs, files in os.walk(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters")):
+        for file in files:
+            if file.endswith(".pkl"):
+                with open(os.path.join(root, file), "rb") as f:
+                    this_time_results = pickle.load(f)
+                all_results = pd.concat([all_results, this_time_results])
+
+    return all_results
+
+
 
 
 def create_tree_from_df(grid_search_results, minutes_since_start, max_depth_override=None, ccp_alpha=0.0):

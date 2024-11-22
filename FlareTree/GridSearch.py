@@ -46,7 +46,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
 
     # get flares
     client, flares_table = tc.connect_to_flares_db()
@@ -62,176 +62,170 @@ def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_m
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
 
     # output folders
-    if not os.path.exists("Results"):
-        os.mkdir("Results")
     if not os.path.exists(os.path.join("Results", run_nickname)):
-        os.mkdir(os.path.join("Results", run_nickname))
-    if not os.path.exists("Parsed Flares"):
-        os.mkdir("Parsed Flares")
+        os.makedirs(os.path.join("Results", run_nickname))
     if not os.path.exists(os.path.join("Parsed Flares", parsed_flares_dir)):
-        os.mkdir(os.path.join("Parsed Flares", parsed_flares_dir))
+        os.makedirs(os.path.join("Parsed Flares", parsed_flares_dir))
     if not os.path.exists(os.path.join("Results", run_nickname, "Tree Graphs")):
         os.mkdir(os.path.join("Results", run_nickname, "Tree Graphs"))
+    if not os.path.exists(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters")):
+        os.mkdir(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters"))
 
     results = []  # store best params for each timestamp
-    for minutes_since_start in range(start_time_minutes, end_time_minutes):
-        out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{minutes_since_start}_minutes_since_start.pkl")
-        if not os.path.exists(out_path):
-            tree_data = []
-            for flare in tqdm(parsed_flares, desc=f"Parsing flares ({minutes_since_start} minutes since start)..."):
-                if flare.minutes_from_start == minutes_since_start and flare.minutes_to_peak > peak_filtering_threshold_minutes:
-                    tree_data.append([flare.flare_id,
-                                      flare.current_xrsa,
-                                      flare.xrsa_one_minute_difference,
-                                      flare.xrsa_three_minute_difference,
-                                      flare.xrsa_five_minute_difference,
-                                      flare.current_xrsb,
-                                      flare.xrsb_one_minute_difference,
-                                      flare.xrsb_three_minute_difference,
-                                      flare.xrsb_five_minute_difference,
-                                      flare.temperature,
-                                      flare.temperature_one_minute_difference,
-                                      flare.temperature_three_minute_difference,
-                                      flare.temperature_five_minute_difference,
-                                      flare.emission_measure,
-                                      flare.emission_measure_one_minute_difference,
-                                      flare.emission_measure_three_minute_difference,
-                                      flare.emission_measure_five_minute_difference,
-                                      flare.is_c5_or_higher]
-                                     )
+    out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
+    if not os.path.exists(out_path):
+        tree_data = []
+        for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
+            if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
+                tree_data.append([flare.flare_id,
+                                  flare.current_xrsa,
+                                  flare.xrsa_one_minute_difference,
+                                  flare.xrsa_three_minute_difference,
+                                  flare.xrsa_five_minute_difference,
+                                  flare.current_xrsb,
+                                  flare.xrsb_one_minute_difference,
+                                  flare.xrsb_three_minute_difference,
+                                  flare.xrsb_five_minute_difference,
+                                  flare.temperature,
+                                  flare.temperature_one_minute_difference,
+                                  flare.temperature_three_minute_difference,
+                                  flare.temperature_five_minute_difference,
+                                  flare.emission_measure,
+                                  flare.emission_measure_one_minute_difference,
+                                  flare.emission_measure_three_minute_difference,
+                                  flare.emission_measure_five_minute_difference,
+                                  flare.is_c5_or_higher]
+                                 )
 
-            tree_data = pd.DataFrame(np.array(tree_data), dtype=np.float64)
-            tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                                 "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                                 "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                                 "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                                 "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                                 "EmissionMeasure5MinuteDifference", "IsC5OrHigher"]
+        tree_data = pd.DataFrame(np.array(tree_data), dtype=np.float64)
+        tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
+                             "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
+                             "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
+                             "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
+                             "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
+                             "EmissionMeasure5MinuteDifference", "IsC5OrHigher"]
 
-            with open(out_path, "wb") as f:
-                pickle.dump(tree_data, f)
+        with open(out_path, "wb") as f:
+            pickle.dump(tree_data, f)
 
-        with open(out_path, "rb") as f:
-            tree_data = pickle.load(f)
+    with open(out_path, "rb") as f:
+        tree_data = pickle.load(f)
 
-        if nan_removal_strategy == "linear_interpolation":
-            tree_data = tc.linear_interpolation(tree_data, minutes_since_start)
+    if nan_removal_strategy == "linear_interpolation":
+        tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
-        train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
+    train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
 
-        if nan_removal_strategy != "linear_interpolation":
-            train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
+    if nan_removal_strategy != "linear_interpolation":
+        train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
-        train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                           "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                           "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                           "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                           "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                           "EmissionMeasure5MinuteDifference"]
+    train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
+                       "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
+                       "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
+                       "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
+                       "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
+                       "EmissionMeasure5MinuteDifference"]
 
-        t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
+    t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
-        # Test parameters, should run in a few minutes for ~30 trees
-        params = {"criterion": ["gini", "entropy"],
-                  "max_depth": [x for x in range(12, 15)],
-                  "min_samples_split": [x for x in range(4, 5)],
-                  "min_samples_leaf": [x for x in range(1, 2)],
-                  "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                  "max_features": [x for x in range(2, 4)],
-                  "class_weight": ["balanced"]}
+    # Test parameters, should run in a few minutes for ~30 trees
+    params = {"criterion": ["gini", "entropy"],
+              "max_depth": [x for x in range(12, 15)],
+              "min_samples_split": [x for x in range(4, 5)],
+              "min_samples_leaf": [x for x in range(1, 2)],
+              "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+              "max_features": [x for x in range(2, 4)],
+              "class_weight": ["balanced"]}
 
-        # Real deal parameters
-        # params = {"criterion": ['gini', 'entropy', 'log_loss'],
-        #           "max_depth": [x for x in range(10, 21)],
-        #           "min_samples_split": [x * 5 for x in range(1, 11)],
-        #           "min_samples_leaf": [x * 5 for x in range(1, 11)],
-        #           "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-        #           "max_features": [x for x in range(5, 17)]}
+    # Real deal parameters
+    # params = {"criterion": ['gini', 'entropy', 'log_loss'],
+    #           "max_depth": [x for x in range(10, 21)],
+    #           "min_samples_split": [x * 5 for x in range(1, 11)],
+    #           "min_samples_leaf": [x * 5 for x in range(1, 11)],
+    #           "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+    #           "max_features": [x for x in range(5, 17)]}
 
-        # fun with custom scoring functions!
-        def false_positive_scorer(y_true, y_predicted):
-            cm = confusion_matrix(y_true, y_predicted)
-            tn, fp, fn, tp = cm.ravel()
-            return fp / (tn + fp)
+    # fun with custom scoring functions!
+    def false_positive_scorer(y_true, y_predicted):
+        cm = confusion_matrix(y_true, y_predicted)
+        tn, fp, fn, tp = cm.ravel()
+        return fp / (tn + fp)
 
-        fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
-        if scoring_metric == "false_positive_rate":
-            scoring_metric = fpr_scorer
-        gs = GridSearchCV(t, params, scoring=scoring_metric)
-        gs.fit(train_x.values, train_y.values)
-        best_params = gs.best_params_
-        # print(best_params)
-        # print(gs.best_score_)
-        # initialize the best tree
-        t = DecisionTreeClassifier(criterion=best_params["criterion"],
-                                   max_depth=best_params["max_depth"],
-                                   max_features=best_params["max_features"],
-                                   min_samples_leaf=best_params["min_samples_leaf"],
-                                   min_samples_split=best_params["min_samples_split"],
-                                   min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
-                                   class_weight=best_params["class_weight"],
-                                   random_state=tc.RANDOM_STATE)
-        t.fit(train_x.values, train_y.values)
-        test_predictions = t.predict(test_x.values)
+    fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
+    if scoring_metric == "false_positive_rate":
+        scoring_metric = fpr_scorer
+    gs = GridSearchCV(t, params, scoring=scoring_metric)
+    gs.fit(train_x.values, train_y.values)
+    best_params = gs.best_params_
+    # print(best_params)
+    # print(gs.best_score_)
+    # initialize the best tree
+    t = DecisionTreeClassifier(criterion=best_params["criterion"],
+                               max_depth=best_params["max_depth"],
+                               max_features=best_params["max_features"],
+                               min_samples_leaf=best_params["min_samples_leaf"],
+                               min_samples_split=best_params["min_samples_split"],
+                               min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
+                               class_weight=best_params["class_weight"],
+                               random_state=tc.RANDOM_STATE)
+    t.fit(train_x.values, train_y.values)
+    test_predictions = t.predict(test_x.values)
 
-        # create confusion matrices (or rather, the related stats) for training and test sets
-        test_y_reshaped = test_y.to_numpy().reshape((np.shape(test_y)[0],))
-        # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
-        # plt.show()
-        test_cm = confusion_matrix(test_y, test_predictions)
-        test_tn, test_fp, test_fn, test_tp = test_cm.ravel()
+    # create confusion matrices (or rather, the related stats) for training and test sets
+    test_y_reshaped = test_y.to_numpy().reshape((np.shape(test_y)[0],))
+    # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
+    # plt.show()
+    test_cm = confusion_matrix(test_y, test_predictions)
+    test_tn, test_fp, test_fn, test_tp = test_cm.ravel()
 
-        test_tpr = test_tp/(test_tp+test_fn)
-        test_fpr = test_fp/(test_tp+test_fp)
-        test_tss = test_tpr - test_fpr
-        test_precision = precision_score(test_y, test_predictions)
-        test_recall = recall_score(test_y, test_predictions)
-        test_f1 = f1_score(test_y, test_predictions)
+    test_tpr = test_tp/(test_tp+test_fn)
+    test_fpr = test_fp/(test_tp+test_fp)
+    test_tss = test_tpr - test_fpr
+    test_precision = precision_score(test_y, test_predictions)
+    test_recall = recall_score(test_y, test_predictions)
+    test_f1 = f1_score(test_y, test_predictions)
 
-        train_predictions = t.predict(train_x.values)
-        train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
-        train_cm = confusion_matrix(train_y, train_predictions)
-        train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
+    train_predictions = t.predict(train_x.values)
+    train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
+    train_cm = confusion_matrix(train_y, train_predictions)
+    train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
 
-        train_tpr = train_tp/(train_tp+train_fn)
-        train_fpr = train_fp/(train_tp+train_fp)
-        train_tss = train_tpr - train_fpr
-        train_precision = precision_score(train_y, train_predictions)
-        train_recall = recall_score(train_y, train_predictions)
-        train_f1 = f1_score(train_y, train_predictions)
+    train_tpr = train_tp/(train_tp+train_fn)
+    train_fpr = train_fp/(train_tp+train_fp)
+    train_tss = train_tpr - train_fpr
+    train_precision = precision_score(train_y, train_predictions)
+    train_recall = recall_score(train_y, train_predictions)
+    train_f1 = f1_score(train_y, train_predictions)
 
-        results.append([minutes_since_start,
-                        tree_data.shape[0],
-                        tree_data[tree_data.IsC5OrHigher == 0].shape[0],
-                        tree_data[tree_data.IsC5OrHigher == 1].shape[0],
-                        best_params["criterion"],
-                        int(best_params["max_depth"]),
-                        int(best_params["max_features"]),
-                        int(best_params["min_samples_leaf"]),
-                        int(best_params["min_samples_split"]),
-                        best_params["min_weight_fraction_leaf"],
-                        best_params["class_weight"],
-                        test_precision,
-                        train_precision,
-                        test_recall,
-                        train_recall,
-                        test_f1,
-                        train_f1,
-                        test_tpr,
-                        train_tpr,
-                        test_fpr,
-                        train_fpr,
-                        test_tss,
-                        train_tss])
+    results.append([time_minutes,
+                    tree_data.shape[0],
+                    tree_data[tree_data.IsC5OrHigher == 0].shape[0],
+                    tree_data[tree_data.IsC5OrHigher == 1].shape[0],
+                    best_params["criterion"],
+                    int(best_params["max_depth"]),
+                    int(best_params["max_features"]),
+                    int(best_params["min_samples_leaf"]),
+                    int(best_params["min_samples_split"]),
+                    best_params["min_weight_fraction_leaf"],
+                    best_params["class_weight"],
+                    test_precision,
+                    train_precision,
+                    test_recall,
+                    train_recall,
+                    test_f1,
+                    train_f1,
+                    test_tpr,
+                    train_tpr,
+                    test_fpr,
+                    train_fpr,
+                    test_tss,
+                    train_tss])
 
-        # plot best tree structure
-        plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
-        plot_tree(t, feature_names=train_x.columns, class_names=["<C5", ">=C5"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
-        graph_out_path = os.path.join("Results", run_nickname, "Tree Graphs", f"{minutes_since_start}_minutes_since_start_tree.png")
-        plt.savefig(graph_out_path)
-
-        with open(os.path.join("Results", run_nickname, "results_temp.pkl"), "wb") as f:
-            pickle.dump(results, f)
+    # plot best tree structure
+    plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
+    plot_tree(t, feature_names=train_x.columns, class_names=["<C5", ">=C5"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
+    graph_out_path = os.path.join("Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
+    plt.savefig(graph_out_path)
 
     results = pd.DataFrame(np.array(results))
     results.columns = ["minutes_since_start", "total_number_of_flares", "number_of_<C5_flares", "number_of_>=C5_flares",
@@ -240,7 +234,7 @@ def grid_search(peak_filtering_threshold_minutes, start_time_minutes, end_time_m
                        "train_recall", "test_f1", "train_f1", "test_tpr", "train_tpr", "test_fpr", "train_fpr", "test_tss",
                        "train_tss"]
 
-    with open(os.path.join("Results", run_nickname, "results.pkl"), "wb") as f:
+    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"results_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(results, f)
 
 
@@ -251,7 +245,6 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("-t", type=int, help="Removes all flares from dataset that are greater than X minutes from their peak")
         parser.add_argument("-s", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for")
-        parser.add_argument("-e", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for. One less than this will be the final timestamp run")
         parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
@@ -265,14 +258,12 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        start_time_minutes = 10
-        end_time_minutes = 25  # make this one more than what will run
+        time_minutes = 10
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "f1"
-        run_nickname = "argparsetest"
+        run_nickname = "onetimetest"
         grid_search(peak_filtering_threshold_minutes,
-                    start_time_minutes,
-                    end_time_minutes,
+                    time_minutes,
                     nan_removal_strategy,
                     scoring_metric,
                     run_nickname)
