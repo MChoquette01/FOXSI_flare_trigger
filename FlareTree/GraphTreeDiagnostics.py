@@ -194,13 +194,13 @@ def graph_flare_count(results):
     # plt.show()
 
 
-results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_filter_past_peak_flares\results.pkl"
+results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
+run_nickname = "20_11_2024_interpolation_f1_peak_filter_0"
 peak_filtering_minutes = 0
 
-with open(results_filepath, "rb") as f:
-    results = pickle.load(f)
+results = tc.get_results_pickle(results_folderpath, run_nickname)
 
-out_dir = os.path.join(os.path.split(results_filepath)[0], "Analysis")
+out_dir = os.path.join(results_folderpath, run_nickname, "Analysis")
 if not os.path.exists(out_dir):
     os.mkdir(out_dir)
 

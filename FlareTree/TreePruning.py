@@ -141,15 +141,15 @@ def prune_max_depth(peak_filtering_minutes):
 
 if __name__ == "__main__":
 
-    results_filepath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results\F1_filter_past_peak_flares\results.pkl"
+    results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
+    run_nickname = "F1_filter_past_peak_flares"
     peak_filtering_minutes = 0
 
-    out_dir = os.path.join(os.path.split(results_filepath)[0], "Pruning")
+    out_dir = os.path.join(results_folderpath, "Pruning")
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
 
-    with open(results_filepath, "rb") as f:
-        results = pickle.load(f)
+    results = tc.get_results_pickle(results_folderpath, run_nickname)
 
     prune_max_depth(peak_filtering_minutes)
     prune_ccp_alphas(peak_filtering_minutes)
