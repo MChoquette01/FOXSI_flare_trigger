@@ -95,12 +95,12 @@ def impute_variable_data(train_x, test_x, strategy):
     return train_x, test_x
 
 
-def merge_results_files(run_nickname):
+def merge_results_files(results_folderpath, run_nickname):
 
     all_results = pd.DataFrame()
-    for root, dirs, files in os.walk(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters")):
+    for root, dirs, files in os.walk(os.path.join(results_folderpath, run_nickname, "Optimal Tree Hyperparameters")):
         for file in files:
-            if file.endswith(".pkl"):
+            if "results" in file and file.endswith(".pkl"):
                 with open(os.path.join(root, file), "rb") as f:
                     this_time_results = pickle.load(f)
                 all_results = pd.concat([all_results, this_time_results])
@@ -115,7 +115,7 @@ def get_results_pickle(results_folderpath, run_nickname):
         with open(all_results_filepath, "rb") as f:
             results = pickle.load(f)
     else:
-        results = merge_results_files(run_nickname)
+        results = merge_results_files(results_folderpath, run_nickname)
         with open(all_results_filepath, "wb") as f:
             pickle.dump(results, f)
 
