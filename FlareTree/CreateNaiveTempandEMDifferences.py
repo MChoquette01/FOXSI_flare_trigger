@@ -2,7 +2,8 @@ import pandas as pd
 import numpy as np
 import tree_common as tc
 import netCDF4 as nc
-from datetime import datetime
+from datetime import datetime, timedelta
+import cftime
 import sys
 sys.path.insert(0, "../Utilities")
 import emission_measure as em
@@ -19,7 +20,7 @@ def get_diff(flare_id, timestamp, current_temp, current_em, difference_minutes):
     """Returns the temp and EM difference over <difference_minutes> minutes from teh current values"""
 
     if timestamp >= difference_minutes:  # can do everything with the DB
-        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp - difference_minutes}'}}, {"Temperature": 1,
+        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp - difference_minutes}$'}}, {"Temperature": 1,
                                                                                                               "EmissionMeasure": 1})
         for record in cursor:
             temp_diff = current_temp - record["Temperature"]
@@ -28,10 +29,14 @@ def get_diff(flare_id, timestamp, current_temp, current_em, difference_minutes):
         minutes_previous_em, minutes_previous_temp = em.compute_goes_emission_measure(xray_xrsa[xray_times_index - difference_minutes],
                                                                                       xray_xrsb[xray_times_index - difference_minutes],
                                                                                       goes_sat=16)
-        minutes_previous_temp = minutes_previous_temp[0]
-        minutes_previous_em = minutes_previous_em[0]
-        temp_diff = current_temp - minutes_previous_temp
-        em_diff = current_em - minutes_previous_em
+        if minutes_previous_temp is not None:
+            temp_diff = current_temp - minutes_previous_temp[0]
+        else:
+            temp_diff = None
+        if minutes_previous_em is not None:
+            em_diff = current_em - minutes_previous_em[0]
+        else:
+            em_diff = None
 
     return temp_diff, em_diff
 
@@ -40,27 +45,32 @@ def get_diff(flare_id, timestamp, current_temp, current_em, difference_minutes):
 xray_data = nc.Dataset(xray_filepath)
 xray_times = xray_data.variables["time"][:].tolist()
 xray_dates = nc.num2date(xray_times, units=xray_data.variables["time"].units)
-xray_xrsa = xray_data.variables["xrsa_flux"][:].tolist()
-xray_xrsb = xray_data.variables["xrsb_flux"][:].tolist()
+xray_xrsa = xray_data.variables["xrsa_flux_observed"][:].tolist()
+xray_xrsb = xray_data.variables["xrsb_flux_observed"][:].tolist()
+
+xray_times_cftime = [x.strftime('%Y-%m-%d %H:%M') for x in cftime.num2date(xray_times, xray_data.variables["time"].units)]
+
 
 client, flares_table = tc.connect_to_flares_db()
 
 diffs = []  # store results
 # get unique flare IDs
 flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
-for flare_id in flare_ids:
+for flare_id in flare_ids[:10]:
     this_flare_diffs = []
     flare_records = flares_table.count_documents({'FlareID': {'$regex': f'^{flare_id}'}})
     for timestamp in range(flare_records):
         # get the temp and EM at this timestamp for this flare
-        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp}'}}, {"Temperature": 1,
-                                                                                         "EmissionMeasure": 1})
+        cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp}$'}}, {"Temperature": 1,
+                                                                                         "EmissionMeasure": 1,
+                                                                                          "CurrentXRSA": 1})
         for record in cursor:
             current_temp = record["Temperature"]
             current_em = record["EmissionMeasure"]
+            current_xrsa = record["CurrentXRSA"]
 
         # if timestamp less than 5, we'll need to read the Xray file at some point since that info isn't in the DB
-        if timestamp <= 5:
+        if timestamp <= 5:  # 5 minutes is the maximum difference we're taking
             # parse flare ID into the date it is
             year = flare_id[:4]
             month = flare_id[4:6]
@@ -68,10 +78,10 @@ for flare_id in flare_ids:
             hour = flare_id[8:10]
             minute = flare_id[10:12]
             # now into a datetime
-            flare_datetime = datetime.strptime(f"{year}-{month}-{day}-{hour}-{minute}", "%Y-%m-%d-%H-%M")
-            xray_dates = nc.date2num([flare_datetime], units=xray_data.variables["time"].units)
-            # find it's index in the xray file
-            xray_times_index = xray_times.index(float(xray_dates[0]))
+            xray_datetime = datetime.strptime(f"{year}-{month}-{day} {hour}:{minute}", "%Y-%m-%d %H:%M")
+            # FITS file/DB starts 15 minutes before the start of the flare
+            xray_date = (xray_datetime - timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M")
+            xray_times_index = xray_times_cftime.index(xray_date)
 
         cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp - 1}'}}, {"Temperature": 1,
                                                                                              "EmissionMeasure": 1})
