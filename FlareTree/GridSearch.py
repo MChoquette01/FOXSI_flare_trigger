@@ -1,5 +1,5 @@
 from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.metrics import  confusion_matrix, precision_score, recall_score, f1_score, make_scorer
+from sklearn.metrics import  confusion_matrix, precision_score, recall_score, f1_score, make_scorer, ConfusionMatrixDisplay
 from sklearn.model_selection import GridSearchCV
 from datetime import datetime
 import pandas as pd
@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle
 import os
+import math
 from tqdm import tqdm
 import argparse
 import sys
@@ -16,6 +17,53 @@ warnings.filterwarnings("ignore", message="Precision is ill-defined and being se
 
 """Run GridSearchCV on flares from MongoDB"""
 
+
+def graph_feature_importance(t, minutes_since_start, train_x, run_nickname):
+    """Create a bar chart showing tree feature importance"""
+
+    features_importances = t.feature_importances_
+    f_i = []
+    nans = []
+    for idx, feature_importance in enumerate(features_importances):
+        if not math.isnan(feature_importance):
+            f_i.append([train_x.columns[idx], feature_importance])
+        else:
+            nans.append([train_x.columns[idx], 0.1])
+    f_i = sorted(f_i, key=lambda x: x[1])
+    plt.figure(figsize=(16, 9))
+    plt.barh([x for x in range(len(f_i))], [x[1] for x in f_i])
+    plt.barh([x + len(f_i) for x in range(len(nans))], [x[1] for x in nans], color="red")
+    plt.yticks(ticks=[x for x in range(len(f_i) + len(nans))], labels=[x[0] for x in f_i + nans], fontsize=14)
+    plt.xticks(fontsize=14)
+    plt.xlabel("Normalized Total Reduction of Split Criteria", fontsize=20)
+    plt.ylabel("Feature", fontsize=20)
+    plt.title(f"Feature Importance: {minutes_since_start - 15} minutes since start", fontsize=24)
+    plt.tight_layout()
+    plt.savefig(os.path.join("Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
+    # plt.show()
+
+
+def graph_confusion_matrices(train_y, train_predictions, test_y, test_predictions, run_nickname):
+
+    plt.clf()
+    fig, ax = plt.subplots(1, 2)
+    fig.set_figwidth(16)
+    fig.set_figheight(9)
+    ax[0].set_title("Training", fontsize=14)
+    ax[1].set_title("Test", fontsize=14)
+    ax[0].tick_params(axis='both', which='major', labelsize=12)
+    ax[1].tick_params(axis='both', which='major', labelsize=12)
+    ax[0].set_xlabel(["Predicted Label"], fontsize=14)
+    ax[1].set_xlabel(["Predicted Label"], fontsize=14)
+    ax[0].set_ylabel(["True Label"], fontsize=14)
+    ax[1].set_ylabel(["True Label"], fontsize=14)
+    plt.rcParams.update({'font.size': 16})
+    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
+    fig.suptitle(f"Flares {time_minutes - 15} minutes since start", fontsize=24)
+    plt.tight_layout()
+    fig.savefig(os.path.join("Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
+    # plt.show()
 
 class Flare:
     def __init__(self, db_entry):
@@ -58,18 +106,25 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     #
     # client.close()
 
-    run_nickname = f'{datetime.now().strftime("%d_%m_%Y")}_{run_nickname}'
+    run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
 
+    def make_dir_safe(folder_path):
+        """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
+        try:
+            if not os.path.exists(folder_path):
+                os.mkdir(folder_path)
+        except FileExistsError:
+            pass
+
     # output folders
-    if not os.path.exists(os.path.join("Results", run_nickname)):
-        os.makedirs(os.path.join("Results", run_nickname))
-    if not os.path.exists(os.path.join("Parsed Flares", parsed_flares_dir)):
-        os.makedirs(os.path.join("Parsed Flares", parsed_flares_dir))
-    if not os.path.exists(os.path.join("Results", run_nickname, "Tree Graphs")):
-        os.mkdir(os.path.join("Results", run_nickname, "Tree Graphs"))
-    if not os.path.exists(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters")):
-        os.mkdir(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters"))
+    make_dir_safe(os.path.join("Results", run_nickname))
+    make_dir_safe(os.path.join("Results", run_nickname, "Trees"))
+    make_dir_safe(os.path.join("Results", run_nickname, "Feature Importance"))
+    make_dir_safe(os.path.join("Results", run_nickname, "Confusion Matrices"))
+    make_dir_safe(os.path.join("Parsed Flares", parsed_flares_dir))
+    make_dir_safe(os.path.join("Results", run_nickname, "Tree Graphs"))
+    make_dir_safe(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters"))
 
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
@@ -169,7 +224,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                                min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
                                class_weight=best_params["class_weight"],
                                random_state=tc.RANDOM_STATE)
+
+    tree_path = os.path.join("Results", run_nickname, "Trees", "untrained")
+    with open(tree_path, 'wb') as f:
+        pickle.dump(t, f)
     t.fit(train_x.values, train_y.values)
+    with open(tree_path.replace('untrained', 'trained'), 'wb') as f:
+        pickle.dump(t, f)
     test_predictions = t.predict(test_x.values)
 
     # create confusion matrices (or rather, the related stats) for training and test sets
@@ -197,6 +258,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     train_precision = precision_score(train_y, train_predictions)
     train_recall = recall_score(train_y, train_predictions)
     train_f1 = f1_score(train_y, train_predictions)
+
+    graph_confusion_matrices(train_y, train_predictions, test_y, test_predictions, run_nickname)
+    graph_feature_importance(t, time_minutes, train_x, run_nickname)
 
     results.append([time_minutes,
                     tree_data.shape[0],
@@ -263,9 +327,9 @@ if __name__ == "__main__":
     else:
         peak_filtering_threshold_minutes = -10000
         time_minutes = 10
-        nan_removal_strategy = "linear_interpolation"
+        nan_removal_strategy = "mean"
         scoring_metric = "f1"
-        run_nickname = "onetimetest"
+        run_nickname = "moreartifacststest"
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     nan_removal_strategy,
