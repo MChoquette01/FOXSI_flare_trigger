@@ -12,10 +12,10 @@ import re
 Requires download of MongoDB (https://www.mongodb.com/try/download/community) and Mongo DB Compass (part of the default install)."""
 
 
-# flare_filepath = r"/Users/pet00184/Flare_Prediction/FOXSI_Matthew_Work/FOXSI_flare_trigger/GOES_XRS_historical.fits"
-# xray_filepath = r"/Users/pet00184/Flare_Prediction/FOXSI_Matthew_Work/FOXSI_flare_trigger/sci_xrsf-l2-avg1m_g16_s20170207_e20240217_v2-2-0.nc"
-flare_filepath = '../../GOES_XRS_historical.fits'
-xray_filepath = '../../sci_xrsf-l2-avg1m_g16_s20170207_e20240217_v2-2-0.nc'
+flare_filepath = r"C:\Users\matth\Documents\Capstone\data\GOES_XRS_historical.fits"
+xray_filepath = r"C:\Users\matth\Documents\Capstone\data\sci_xrsf-l2-avg1m_g16_s20170207_e20240906_v2-2-0.nc"
+# flare_filepath = '../../GOES_XRS_historical.fits'
+# xray_filepath = '../../sci_xrsf-l2-avg1m_g16_s20170207_e20240217_v2-2-0.nc'
 
 
 def assign_flare_class(xrsb_history):
@@ -37,9 +37,9 @@ def assign_flare_class(xrsb_history):
 print('trying to open xray file')
 # open xray file
 xray_data = nc.Dataset(xray_filepath)
-xray_xrsa_fluxes = xray_data.variables["xrsa_flux"][:]
+xray_xrsa_fluxes = xray_data.variables["xrsa_flux_observed"][:]
 xray_xrsa_fluxes = xray_xrsa_fluxes.tolist(fill_value=np.nan)
-xray_xrsb_fluxes = xray_data.variables["xrsb_flux"][:]
+xray_xrsb_fluxes = xray_data.variables["xrsb_flux_observed"][:]
 xray_xrsb_fluxes = xray_xrsb_fluxes.tolist(fill_value=np.nan)
 xray_times = xray_data.variables["time"][:]
 xray_times = xray_times.tolist(fill_value=np.nan)
@@ -144,7 +144,8 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
             em_5_minute_diff = em_5_minute_diff[0]
             temp_5_minute_diff = temp_5_minute_diff[0]
 
-        flares_table.insert_one({"FlareID": f"{flare_id}_{idx}",
+        flares_table.insert_one({"_id": f"{flare_id}_{idx}",
+                                 "FlareID": f"{flare_id}_{idx}",
                                  "FlareClass": flare_class,
                                  "MinutesToPeak": minutes_to_peak,
                                  "CurrentXRSA": float(xrsa_datum) if xrsa_datum is not None else None,
