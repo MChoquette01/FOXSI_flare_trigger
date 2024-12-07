@@ -71,7 +71,7 @@ def linear_interpolation(input_data, minutes_since_start):
         if column_name != "FlareID" and column_name != "IsC5OrHigher":
             col = input_data[column_name]
             if col.isna().sum() != 0:
-                lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
+                lookup_table_path = os.path.join("Interpolations", f"{column_name}.pkl")
                 with open(lookup_table_path, "rb") as f:
                     lookup_table = pickle.load(f)
                 for nan_idx in col[col.isnull()].index.to_list():
