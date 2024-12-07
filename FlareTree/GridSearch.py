@@ -65,6 +65,15 @@ def graph_confusion_matrices(train_y, train_predictions, test_y, test_prediction
     fig.savefig(os.path.join("Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
     # plt.show()
 
+
+def make_dir_safe(folder_path):
+    """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
+    try:
+        if not os.path.exists(folder_path):
+            os.mkdir(folder_path)
+    except FileExistsError:
+        pass
+
 class Flare:
     def __init__(self, db_entry):
         flare_id_timestamp = db_entry["FlareID"].split("_")
@@ -94,7 +103,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, output_folder, run_nickname, debug_mode):
 
     # get flares
     # client, flares_table = tc.connect_to_flares_db()
@@ -109,22 +118,16 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
 
-    def make_dir_safe(folder_path):
-        """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
-        try:
-            if not os.path.exists(folder_path):
-                os.mkdir(folder_path)
-        except FileExistsError:
-            pass
-
     # output folders
-    make_dir_safe(os.path.join("Results", run_nickname))
-    make_dir_safe(os.path.join("Results", run_nickname, "Trees"))
-    make_dir_safe(os.path.join("Results", run_nickname, "Feature Importance"))
-    make_dir_safe(os.path.join("Results", run_nickname, "Confusion Matrices"))
-    make_dir_safe(os.path.join("Parsed Flares", parsed_flares_dir))
-    make_dir_safe(os.path.join("Results", run_nickname, "Tree Graphs"))
-    make_dir_safe(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters"))
+    make_dir_safe(os.path.join(output_folder, "Parsed Flares"))
+    make_dir_safe(os.path.join(output_folder, "Parsed Flares", parsed_flares_dir))
+    make_dir_safe(os.path.join(output_folder, "Results"))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Trees"))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Feature Importance"))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices"))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Tree Graphs"))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters"))
 
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
@@ -183,23 +186,24 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
 
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
-    # Test parameters, should run in a few minutes for ~30 trees
-    params = {"criterion": ["gini", "entropy"],
-              "max_depth": [x for x in range(12, 15)],
-              "min_samples_split": [x for x in range(4, 5)],
-              "min_samples_leaf": [x for x in range(1, 2)],
-              "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-              "max_features": [x for x in range(2, 4)],
-              "class_weight": ["balanced"]}
-
-    # Real deal parameters
-    # params = {"criterion": ['gini', 'entropy'],
-    #           "max_depth": [x for x in range(10, 21)],
-    #           "min_samples_split": [x * 5 for x in range(1, 11)],
-    #           "min_samples_leaf": [x * 5 for x in range(1, 11)],
-    #           "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-    #           "max_features": [x for x in range(5, 17)],
-    #           "class_weight": ["balanced"]}
+    if debug_mode:
+        # Test parameters, should run in a few minutes for ~30 trees
+        params = {"criterion": ["gini", "entropy"],
+                  "max_depth": [x for x in range(12, 15)],
+                  "min_samples_split": [x for x in range(4, 5)],
+                  "min_samples_leaf": [x for x in range(1, 2)],
+                  "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                  "max_features": [x for x in range(2, 4)],
+                  "class_weight": ["balanced"]}
+    else:
+        # Real deal parameters
+        params = {"criterion": ['gini', 'entropy'],
+                  "max_depth": [x for x in range(10, 21)],
+                  "min_samples_split": [x * 5 for x in range(1, 11)],
+                  "min_samples_leaf": [x * 5 for x in range(1, 11)],
+                  "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                  "max_features": [x for x in range(5, 17)],
+                  "class_weight": ["balanced"]}
 
     # fun with custom scoring functions!
     def false_positive_scorer(y_true, y_predicted):
@@ -315,13 +319,17 @@ if __name__ == "__main__":
         parser.add_argument("-s", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for")
         parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
+        parser.add_argument("-o", type=str, help="Output folder. A 'Results' folder will be created inside")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
+        parser.add_argument("-d", type=bool, help="Debug mode: check if workflow is good by running s smaller, quick grid search")
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
                     nan_removal_strategy=args.i,
                     scoring_metric=args.m,
-                    run_nickname=args.n)
+                    output_folder=args.o,
+                    run_nickname=args.n,
+                    debug_mode=args.d)
 
     # run here
     else:
@@ -329,9 +337,13 @@ if __name__ == "__main__":
         time_minutes = 10
         nan_removal_strategy = "mean"
         scoring_metric = "f1"
-        run_nickname = "moreartifacststest"
+        output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
+        run_nickname = "outputfoldertest"
+        use_debug_mode = True
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     nan_removal_strategy,
                     scoring_metric,
-                    run_nickname)
+                    output_folder,
+                    run_nickname,
+                    use_debug_mode)

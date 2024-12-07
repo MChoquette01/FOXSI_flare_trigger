@@ -8,13 +8,13 @@ import math
 
 RESPONSE_FILE_NAME = 'goes-response-latest.fits'
 
-def download_latest_goes_response() -> None:
+def download_latest_goes_response():
     ''' Get the latest GOES response function and save it to a .fits file '''
     URL = 'https://sohoftp.nascom.nasa.gov/solarsoft/gen/idl/synoptic/goes/goes_chianti_response_latest.fits'
     req.urlretrieve(URL, RESPONSE_FILE_NAME)
 
 
-def load_response_data(satellite_number: int | np.ndarray[int]) -> dict[int, dict[str, np.ndarray]]:
+def load_response_data(satellite_number):
     # response data calculated for coronal abundances
     # for multiple GOES satellites
     ret = dict()
@@ -32,7 +32,7 @@ def load_response_data(satellite_number: int | np.ndarray[int]) -> dict[int, dic
     return ret
 
 
-def compute_goes_emission_measure(xrsa_data, xrsb_data, goes_sat) -> np.ndarray:
+def compute_goes_emission_measure(xrsa_data, xrsb_data, goes_sat):
     '''
     Assumes modern (number 16+) GOES satellites. 
     Updated to provide XRSA and XRSB arrays, so that flux differences may be used.
