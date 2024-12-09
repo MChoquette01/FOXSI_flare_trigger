@@ -293,7 +293,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
     plot_tree(t, feature_names=train_x.columns, class_names=["<C5", ">=C5"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
-    graph_out_path = os.path.join("Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
+    graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
 
     results = pd.DataFrame(np.array(results))
