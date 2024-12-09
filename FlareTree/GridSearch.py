@@ -263,8 +263,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     train_recall = recall_score(train_y, train_predictions)
     train_f1 = f1_score(train_y, train_predictions)
 
-    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname)
-    graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname, time_minutes)
+    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes)
+    graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname)
 
     results.append([time_minutes,
                     tree_data.shape[0],
