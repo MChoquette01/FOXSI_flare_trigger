@@ -18,7 +18,7 @@ warnings.filterwarnings("ignore", message="Precision is ill-defined and being se
 """Run GridSearchCV on flares from MongoDB"""
 
 
-def graph_feature_importance(t, minutes_since_start, train_x, run_nickname):
+def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run_nickname):
     """Create a bar chart showing tree feature importance"""
 
     features_importances = t.feature_importances_
@@ -39,11 +39,11 @@ def graph_feature_importance(t, minutes_since_start, train_x, run_nickname):
     plt.ylabel("Feature", fontsize=20)
     plt.title(f"Feature Importance: {minutes_since_start - 15} minutes since start", fontsize=24)
     plt.tight_layout()
-    plt.savefig(os.path.join("Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
+    plt.savefig(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
 
 
-def graph_confusion_matrices(train_y, train_predictions, test_y, test_predictions, run_nickname):
+def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes):
 
     plt.clf()
     fig, ax = plt.subplots(1, 2)
@@ -62,7 +62,7 @@ def graph_confusion_matrices(train_y, train_predictions, test_y, test_prediction
     ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
     fig.suptitle(f"Flares {time_minutes - 15} minutes since start", fontsize=24)
     plt.tight_layout()
-    fig.savefig(os.path.join("Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
+    fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
     # plt.show()
 
 
@@ -229,7 +229,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                                class_weight=best_params["class_weight"],
                                random_state=tc.RANDOM_STATE)
 
-    tree_path = os.path.join("Results", run_nickname, "Trees", "untrained")
+    tree_path = os.path.join(output_folder, "Results", run_nickname, "Trees", f"untrained_{time_minutes - 15}_minutes_since_start")
     with open(tree_path, 'wb') as f:
         pickle.dump(t, f)
     t.fit(train_x.values, train_y.values)
@@ -263,8 +263,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     train_recall = recall_score(train_y, train_predictions)
     train_f1 = f1_score(train_y, train_predictions)
 
-    graph_confusion_matrices(train_y, train_predictions, test_y, test_predictions, run_nickname)
-    graph_feature_importance(t, time_minutes, train_x, run_nickname)
+    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname)
+    graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname, time_minutes)
 
     results.append([time_minutes,
                     tree_data.shape[0],
@@ -303,10 +303,10 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                        "train_recall", "test_f1", "train_f1", "test_tpr", "train_tpr", "test_fpr", "train_fpr", "test_tss",
                        "train_tss"]
 
-    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"results_{time_minutes}.pkl"), "wb") as f:
+    with open(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters", f"results_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(results, f)
 
-    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"grid_{time_minutes}.pkl"), "wb") as f:
+    with open(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters", f"grid_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(params, f)
 
 
