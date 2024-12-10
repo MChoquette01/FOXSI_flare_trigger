@@ -187,7 +187,6 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
     if debug_mode:
-        print("Quick")
         # Test parameters, should run in a few minutes for ~30 trees
         params = {"criterion": ["gini", "entropy"],
                   "max_depth": [x for x in range(12, 15)],
@@ -197,7 +196,6 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                   "max_features": [x for x in range(2, 4)],
                   "class_weight": ["balanced"]}
     else:
-        print("Long")
         # Real deal parameters
         params = {"criterion": ['gini', 'entropy'],
                   "max_depth": [x for x in range(10, 21)],
@@ -323,7 +321,9 @@ if __name__ == "__main__":
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-o", type=str, help="Output folder. A 'Results' folder will be created inside")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
-        parser.add_argument('--debug', action=argparse.BooleanOptionalAction, help="Use to test a quick grid to get results quicker")
+        parser.add_argument('--debug', action='store_true', help="Use to test a quick grid to get results quicker")
+        parser.add_argument('--no-debug', dest='debug', action='store_false')
+        parser.set_defaults(debug=False)
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
