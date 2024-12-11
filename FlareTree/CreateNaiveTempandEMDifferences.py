@@ -25,8 +25,14 @@ def get_diff(flare_id, timestamp, current_temp, current_em, difference_minutes):
         cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_{timestamp - difference_minutes}$'}}, {"Temperature": 1,
                                                                                                               "EmissionMeasure": 1})
         for record in cursor:
-            temp_diff = current_temp - record["Temperature"]
-            em_diff = current_em - record["EmissionMeasure"]
+            try:
+                temp_diff = current_temp - record["Temperature"]
+            except TypeError:
+                temp_diff = None
+            try:
+                em_diff = current_em - record["EmissionMeasure"]
+            except TypeError:
+                em_diff = None
     else:  # gonna need the xray file
         minutes_previous_em, minutes_previous_temp = em.compute_goes_emission_measure(xray_xrsa[xray_times_index - difference_minutes],
                                                                                       xray_xrsb[xray_times_index - difference_minutes],
