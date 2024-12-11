@@ -46,20 +46,23 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, run_nickname):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, use_naive_diffs, run_nickname):
 
     # get flares
-    # client, flares_table = tc.connect_to_flares_db()
+    client, flares_table = tc.connect_to_flares_db()
 
-    # parsed_flares = []
-    # all_entries = flares_table.find({})
-    # for record in all_entries:
-    #     parsed_flares.append(Flare(record))
-    #
-    # client.close()
+    parsed_flares = []
+    all_entries = flares_table.find({})
+    for record in all_entries:
+        parsed_flares.append(Flare(record))
+
+    client.close()
 
     run_nickname = f'{datetime.now().strftime("%d_%m_%Y")}_{run_nickname}'
-    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
+    if use_naive_diffs:
+        parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_naive"
+    else:
+        parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
 
     # output folders
     if not os.path.exists(os.path.join("Results", run_nickname)):
@@ -74,9 +77,14 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
     if not os.path.exists(out_path):
+        # open naive differences DF
+        with open(os.path.join("Naive Differences", "naive_differences.pkl"), 'rb') as f:
+            naive_differences = pickle.load(f)
         tree_data = []
-        for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
+        for flare in tqdm(parsed_flares[:100], desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
+                relevant_naive_row = naive_differences[(naive_differences['Flare ID'] == int(flare.flare_id)) &
+                                                       (naive_differences['Timestamp'] == time_minutes)]
                 tree_data.append([flare.flare_id,
                                   flare.current_xrsa,
                                   flare.xrsa_one_minute_difference,
@@ -94,6 +102,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                                   flare.emission_measure_one_minute_difference,
                                   flare.emission_measure_three_minute_difference,
                                   flare.emission_measure_five_minute_difference,
+                                  relevant_naive_row.Temperature1MinuteDifference.iloc[0],
+                                  relevant_naive_row.Temperature3MinuteDifference.iloc[0],
+                                  relevant_naive_row.Temperature5MinuteDifference.iloc[0],
+                                  relevant_naive_row.EmissionMeasure1MinuteDifference.iloc[0] / 10**30,
+                                  relevant_naive_row.EmissionMeasure3MinuteDifference.iloc[0] / 10**30,
+                                  relevant_naive_row.EmissionMeasure5MinuteDifference.iloc[0] / 10**30,
                                   flare.is_c5_or_higher]
                                  )
 
@@ -103,7 +117,10 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                              "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
                              "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
                              "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                             "EmissionMeasure5MinuteDifference", "IsC5OrHigher"]
+                             "EmissionMeasure5MinuteDifference", "NaiveTemperature1MinuteDifference",
+                             "NaiveTemperature3MinuteDifference", "NaiveTemperature5MinuteDifference",
+                             "NaiveEmissionMeasure1MinuteDifference", "NaiveEmissionMeasure3MinuteDifference",
+                             "NaiveEmissionMeasure5MinuteDifference", "IsC5OrHigher"]
 
         with open(out_path, "wb") as f:
             pickle.dump(tree_data, f)
@@ -119,12 +136,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
-    train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                       "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                       "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                       "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                       "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                       "EmissionMeasure5MinuteDifference"]
+    train_x.columns = list(tree_data.columns)[1:-1]
 
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
@@ -251,23 +263,29 @@ if __name__ == "__main__":
         parser.add_argument("-s", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for")
         parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
+        parser.add_argument('--naive', action='store_true', help="Use to parse flares with naive temp/EM differences")
+        parser.add_argument('--no-naive', dest='naive', action='store_false')
+        parser.set_defaults(add_naive=False)
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
                     nan_removal_strategy=args.i,
                     scoring_metric=args.m,
+                    use_naive_diffs=args.naive,
                     run_nickname=args.n)
 
     # run here
     else:
-        peak_filtering_threshold_minutes = -10000
+        peak_filtering_threshold_minutes = 0
         time_minutes = 10
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "f1"
-        run_nickname = "onetimetest"
+        use_naive_diffs = True
+        run_nickname = "naivedifftest"
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     nan_removal_strategy,
                     scoring_metric,
+                    use_naive_diffs,
                     run_nickname)

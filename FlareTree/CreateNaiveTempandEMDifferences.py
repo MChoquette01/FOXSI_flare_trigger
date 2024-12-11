@@ -4,6 +4,8 @@ import tree_common as tc
 import netCDF4 as nc
 from datetime import datetime, timedelta
 import cftime
+import pickle
+import os
 import sys
 sys.path.insert(0, "../Utilities")
 import emission_measure as em
@@ -56,7 +58,7 @@ client, flares_table = tc.connect_to_flares_db()
 diffs = []  # store results
 # get unique flare IDs
 flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
-for flare_id in flare_ids[:10]:
+for flare_id in flare_ids:
     this_flare_diffs = []
     flare_records = flares_table.count_documents({'FlareID': {'$regex': f'^{flare_id}'}})
     for timestamp in range(flare_records):
@@ -99,3 +101,23 @@ results.columns = ["Flare ID", "Timestamp", "Temperature1MinuteDifference", "Emi
                    "Temperature3MinuteDifference", "EmissionMeasure3MinuteDifference",
                    "Temperature5MinuteDifference", "EmissionMeasure5MinuteDifference"]
 client.close()
+
+print(results.shape)
+
+# no interpolate to remove NaNs
+interpolated_df = pd.DataFrame()
+for flare_id in results['Flare ID'].unique():
+    flare_diffs = results[results['Flare ID'] == flare_id]
+    x = flare_diffs.astype(np.float64).interpolate(method='linear', limit_direction='both')
+    x.columns = results.columns
+    interpolated_df = pd.concat([interpolated_df, x], axis=0)
+interpolated_df['Flare ID'] = interpolated_df['Flare ID'].astype(np.int64)
+interpolated_df['Timestamp'] = interpolated_df['Timestamp'].astype(int)
+
+print(interpolated_df.shape)
+
+if not os.path.exists("Naive Differences"):
+    os.mkdir("Naive Differences")
+
+with open(os.path.join("Naive Differences", "naive_differences.pkl"), 'wb') as f:
+    pickle.dump(interpolated_df, f)
