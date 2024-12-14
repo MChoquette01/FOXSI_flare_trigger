@@ -75,12 +75,12 @@ def make_dir_safe(folder_path):
         pass
 
 class Flare:
-    def __init__(self, db_entry):
+    def __init__(self, db_entry, flux_threshold_letter, flux_threshold_number):
         flare_id_timestamp = db_entry["FlareID"].split("_")
         self.flare_id = flare_id_timestamp[0]
         self.minutes_from_start = int(flare_id_timestamp[1])
         self.flare_class = db_entry["FlareClass"]
-        self.is_c5_or_higher = int(tc.flare_c5_or_higher(self.flare_class))
+        self.is_strong_flare = int(tc.is_flare_strong(self.flare_class, letter_level=flux_threshold_letter, number_level=flux_threshold_number))
         self.minutes_to_peak = db_entry["MinutesToPeak"]
         self.current_xrsa = db_entry["CurrentXRSA"]
         self.current_xrsb = db_entry["CurrentXRSB"]
@@ -103,7 +103,10 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, output_folder, run_nickname, debug_mode):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, output_folder, run_nickname, debug_mode):
+
+    strong_flare_threshold_letter = strong_flare_threshold[0]
+    strong_flare_threshold_number = strong_flare_threshold[1:]
 
     # get flares
     # client, flares_table = tc.connect_to_flares_db()
@@ -111,12 +114,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     # parsed_flares = []
     # all_entries = flares_table.find({})
     # for record in all_entries:
-    #     parsed_flares.append(Flare(record))
+    #     parsed_flares.append(Flare(record, strong_flare_threshold_letter, strong_flare_threshold_number))
     #
     # client.close()
 
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
-    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
+    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_threshold_{strong_flare_threshold_number}"
 
     # output folders
     make_dir_safe(os.path.join(output_folder, "Parsed Flares"))
@@ -317,6 +320,7 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("-t", type=int, help="Removes all flares from dataset that are greater than X minutes from their peak")
         parser.add_argument("-s", type=int, help="Start time (from the start of the FITS file, 0 indexed) in minutes to build models for")
+        parser.add_argument("-f", type=str, help="Inclusively lower bound on what is considered a strong flare (positive class)")
         parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-o", type=str, help="Output folder. A 'Results' folder will be created inside")
@@ -327,6 +331,7 @@ if __name__ == "__main__":
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
+                    strong_flare_threshold=args.f,
                     nan_removal_strategy=args.i,
                     scoring_metric=args.m,
                     output_folder=args.o,
@@ -336,7 +341,8 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 10
+        time_minutes = 10,
+        strong_flare_threshold = "C5.0",
         nan_removal_strategy = "mean"
         scoring_metric = "f1"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
@@ -344,6 +350,7 @@ if __name__ == "__main__":
         use_debug_mode = True
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
+                    flare_threshold,
                     nan_removal_strategy,
                     scoring_metric,
                     output_folder,

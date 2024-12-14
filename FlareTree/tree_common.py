@@ -35,6 +35,26 @@ def flare_c5_or_higher(flux_level):
             return True
 
 
+def is_flare_strong(test_flux_level, letter_level="C", number_level=5.0):
+
+    ordered_letter_classes = ["A", "B", "C", "M", "X"]
+    flare_letter_index = ordered_letter_classes.index(letter_level)
+
+    test_flux_level_letter_index = ordered_letter_classes.index(test_flux_level[0])
+    # test flare is weaker
+    if test_flux_level_letter_index < flare_letter_index:
+        return False
+    # test flare is stronger
+    elif test_flux_level_letter_index > flare_letter_index:
+        return True
+    # test flare is the same letter class
+    if float(test_flux_level[1:]) < number_level:
+        return False
+    else:
+        return True
+
+
+
 def get_training_and_test_sets(tree_data, train_proportion=0.8):
 
     rows, cols = tree_data.shape
