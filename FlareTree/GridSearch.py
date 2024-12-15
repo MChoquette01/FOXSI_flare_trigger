@@ -42,6 +42,12 @@ class Flare:
         self.emission_measure_one_minute_difference = db_entry["EmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure1MinuteDifference"] is not None else None
         self.emission_measure_three_minute_difference = db_entry["EmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure3MinuteDifference"] is not None else None
         self.emission_measure_five_minute_difference = db_entry["EmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure5MinuteDifference"] is not None else None
+        self.naive_temperature_one_minute_difference = db_entry["NaiveTemperature1MinuteDifference"]
+        self.naive_temperature_three_minute_difference = db_entry["NaiveTemperature3MinuteDifference"]
+        self.naive_temperature_five_minute_difference = db_entry["NaiveTemperature5MinuteDifference"]
+        self.naive_emission_measure_one_minute_difference = db_entry["NaiveEmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure1MinuteDifference"] is not None else None
+        self.naive_emission_measure_three_minute_difference = db_entry["NaiveEmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure3MinuteDifference"] is not None else None
+        self.naive_emission_measure_five_minute_difference = db_entry["NaiveEmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure5MinuteDifference"] is not None else None
         self.xrsa_remaining = db_entry["XRSARemaining"]
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
@@ -49,7 +55,7 @@ class Flare:
 def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, use_naive_diffs, run_nickname):
 
     # get flares
-    client, flares_table = tc.connect_to_flares_db()
+    client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
 
     parsed_flares = []
     all_entries = flares_table.find({})
@@ -81,10 +87,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
         with open(os.path.join("Naive Differences", "naive_differences.pkl"), 'rb') as f:
             naive_differences = pickle.load(f)
         tree_data = []
-        for flare in tqdm(parsed_flares[:100], desc=f"Parsing flares ({time_minutes} minutes since start)..."):
+        for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
-                relevant_naive_row = naive_differences[(naive_differences['Flare ID'] == int(flare.flare_id)) &
-                                                       (naive_differences['Timestamp'] == time_minutes)]
                 tree_data.append([flare.flare_id,
                                   flare.current_xrsa,
                                   flare.xrsa_one_minute_difference,
@@ -102,12 +106,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                                   flare.emission_measure_one_minute_difference,
                                   flare.emission_measure_three_minute_difference,
                                   flare.emission_measure_five_minute_difference,
-                                  relevant_naive_row.Temperature1MinuteDifference.iloc[0],
-                                  relevant_naive_row.Temperature3MinuteDifference.iloc[0],
-                                  relevant_naive_row.Temperature5MinuteDifference.iloc[0],
-                                  relevant_naive_row.EmissionMeasure1MinuteDifference.iloc[0] / 10**30,
-                                  relevant_naive_row.EmissionMeasure3MinuteDifference.iloc[0] / 10**30,
-                                  relevant_naive_row.EmissionMeasure5MinuteDifference.iloc[0] / 10**30,
+                                  flare.naive_temperature_one_minute_difference,
+                                  flare.naive_temperature_three_minute_difference,
+                                  flare.naive_temperature_five_minute_difference,
+                                  flare.naive_emission_measure_one_minute_difference if flare.naive_emission_measure_one_minute_difference is not None else None,
+                                  flare.naive_emission_measure_three_minute_difference if flare.naive_emission_measure_three_minute_difference is not None else None,
+                                  flare.naive_emission_measure_five_minute_difference if flare.naive_emission_measure_five_minute_difference is not None else None,
                                   flare.is_c5_or_higher]
                                  )
 
@@ -278,7 +282,7 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = 0
-        time_minutes = 10
+        time_minutes = 25
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "f1"
         use_naive_diffs = True

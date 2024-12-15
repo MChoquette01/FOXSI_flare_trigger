@@ -12,12 +12,15 @@ import pickle
 RANDOM_STATE = 102024
 
 
-def connect_to_flares_db():
+def connect_to_flares_db(use_naive=False):
     """Connect to local MongoDB Flares DB"""
 
     client = MongoClient("mongodb://localhost:27017/")
     flares_db = client["Flares"]
-    flares_table = flares_db["Flares"]
+    if use_naive:
+        flares_table = flares_db["NaiveFlares"]
+    else:
+        flares_table = flares_db["Flares"]
 
     return client, flares_table
 
@@ -71,7 +74,7 @@ def linear_interpolation(input_data, minutes_since_start):
         if column_name != "FlareID" and column_name != "IsC5OrHigher":
             col = input_data[column_name]
             if col.isna().sum() != 0:
-                lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
+                lookup_table_path = os.path.join("Interpolations", f"{column_name}.pkl")
                 with open(lookup_table_path, "rb") as f:
                     lookup_table = pickle.load(f)
                 for nan_idx in col[col.isnull()].index.to_list():
