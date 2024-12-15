@@ -60,9 +60,9 @@ flares_db = myclient["Flares"]
 flares_table = flares_db["NaiveFlares"]
 flares_table.delete_many({})  # clear out whatever is in there
 
+
 def calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, n):
-    ''' Calculates the n-minute differences for xrsa and xrsb
-    '''
+    ''' Calculates the n-minute differences for xrsa and xrsb'''
     if idx >= n:
         xrsa_n_minute_diff = float(flare_data["xrsa"][idx] - flare_data["xrsa"][idx - n])
         xrsb_n_minute_diff = float(flare_data["xrsb"][idx] - flare_data["xrsb"][idx - n])
@@ -171,13 +171,13 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
             em_5_minute_diff = em_5_minute_diff[0]
             temp_5_minute_diff = temp_5_minute_diff[0]
 
-
         # naive differences
         naive_em_one_minute_diff, naive_temp_one_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=1)
         naive_em_three_minute_diff, naive_temp_three_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=3)
         naive_em_five_minute_diff, naive_temp_five_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=5)
 
-        flares_table.insert_one({"FlareID": f"{flare_id}_{idx}",
+        flares_table.insert_one({"_id": f"{flare_id}_{idx}",
+                                 "FlareID": f"{flare_id}_{idx}",
                                  "FlareClass": flare_class,
                                  "MinutesToPeak": minutes_to_peak,
                                  "CurrentXRSA": float(xrsa_datum) if xrsa_datum is not None else None,

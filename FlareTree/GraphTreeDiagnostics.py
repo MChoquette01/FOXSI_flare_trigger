@@ -194,8 +194,8 @@ def graph_flare_count(results):
     # plt.show()
 
 
-results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
-run_nickname = "20_11_2024_interpolation_f1_peak_filter_0"
+results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\Results"
+run_nickname = "15_12_2024_naivedifftest"
 peak_filtering_minutes = 0
 
 results = tc.get_results_pickle(results_folderpath, run_nickname)
