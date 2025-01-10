@@ -43,7 +43,7 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
     # plt.show()
 
 
-def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes):
+def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold):
 
     plt.clf()
     fig, ax = plt.subplots(1, 2)
@@ -58,8 +58,8 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     ax[0].set_ylabel(["True Label"], fontsize=14)
     ax[1].set_ylabel(["True Label"], fontsize=14)
     plt.rcParams.update({'font.size': 16})
-    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
-    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
+    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=[f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=[f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]).plot(ax=ax[1])
     fig.suptitle(f"Flares {time_minutes - 15} minutes since start", fontsize=24)
     plt.tight_layout()
     fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
@@ -80,7 +80,7 @@ class Flare:
         self.flare_id = flare_id_timestamp[0]
         self.minutes_from_start = int(flare_id_timestamp[1])
         self.flare_class = db_entry["FlareClass"]
-        self.is_strong_flare = int(tc.is_flare_strong(self.flare_class, letter_level=flux_threshold_letter, number_level=flux_threshold_number))
+        self.is_strong_flare = int(tc.is_flare_strong(self.flare_class, threshold_letter_level=flux_threshold_letter, threshold_number_level=flux_threshold_number))
         self.minutes_to_peak = db_entry["MinutesToPeak"]
         self.current_xrsa = db_entry["CurrentXRSA"]
         self.current_xrsb = db_entry["CurrentXRSB"]
@@ -108,18 +108,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
 
-    # get flares
-    # client, flares_table = tc.connect_to_flares_db()
-
-    # parsed_flares = []
-    # all_entries = flares_table.find({})
-    # for record in all_entries:
-    #     parsed_flares.append(Flare(record, strong_flare_threshold_letter, strong_flare_threshold_number))
-    #
-    # client.close()
-
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
-    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_threshold_{strong_flare_threshold_number}"
+    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"
 
     # output folders
     make_dir_safe(os.path.join(output_folder, "Parsed Flares"))
@@ -135,6 +125,17 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
     if not os.path.exists(out_path):
+
+        # get flares
+        client, flares_table = tc.connect_to_flares_db()
+
+        parsed_flares = []
+        all_entries = flares_table.find({})
+        for record in all_entries:
+            parsed_flares.append(Flare(record, strong_flare_threshold_letter, strong_flare_threshold_number))
+
+        client.close()
+
         tree_data = []
         for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
@@ -155,7 +156,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                   flare.emission_measure_one_minute_difference,
                                   flare.emission_measure_three_minute_difference,
                                   flare.emission_measure_five_minute_difference,
-                                  flare.is_c5_or_higher]
+                                  flare.is_strong_flare]
                                  )
 
         tree_data = pd.DataFrame(np.array(tree_data), dtype=np.float64)
@@ -164,7 +165,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                              "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
                              "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
                              "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                             "EmissionMeasure5MinuteDifference", "IsC5OrHigher"]
+                             "EmissionMeasure5MinuteDifference", "IsStrongFlare"]
 
         with open(out_path, "wb") as f:
             pickle.dump(tree_data, f)
@@ -205,7 +206,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                   "min_samples_split": [x * 5 for x in range(1, 11)],
                   "min_samples_leaf": [x * 5 for x in range(1, 11)],
                   "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                  "max_features": [x for x in range(5, 17)],
+                  "max_features": [x for x in range(5, 23)],
                   "class_weight": ["balanced"]}
 
     # fun with custom scoring functions!
@@ -266,13 +267,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     train_recall = recall_score(train_y, train_predictions)
     train_f1 = f1_score(train_y, train_predictions)
 
-    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes)
+    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold)
     graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname)
 
     results.append([time_minutes,
                     tree_data.shape[0],
-                    tree_data[tree_data.IsC5OrHigher == 0].shape[0],
-                    tree_data[tree_data.IsC5OrHigher == 1].shape[0],
+                    tree_data[tree_data.IsStrongFlare == 0].shape[0],
+                    tree_data[tree_data.IsStrongFlare == 1].shape[0],
                     best_params["criterion"],
                     int(best_params["max_depth"]),
                     int(best_params["max_features"]),
@@ -295,12 +296,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
-    plot_tree(t, feature_names=train_x.columns, class_names=["<C5", ">=C5"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
+    plot_tree(t, feature_names=train_x.columns, class_names=[f"<{strong_flare_threshold}", f">={strong_flare_threshold}"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
     graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
 
     results = pd.DataFrame(np.array(results))
-    results.columns = ["minutes_since_start", "total_number_of_flares", "number_of_<C5_flares", "number_of_>=C5_flares",
+    results.columns = ["minutes_since_start", "total_number_of_flares", "number_of_weak_flares", "number_of_strong_flares",
                        "criterion", "max_depth", "max_features", "min_samples_leaf", "min_samples_split",
                        "min_weight_fraction_leaf", "class_weight", "test_precision", "train_precision", "test_recall",
                        "train_recall", "test_f1", "train_f1", "test_tpr", "train_tpr", "test_fpr", "train_fpr", "test_tss",
@@ -341,16 +342,16 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 10,
-        strong_flare_threshold = "C5.0",
+        time_minutes = 20
+        strong_flare_threshold = "M1.0"  # inclusive to strong flares
         nan_removal_strategy = "mean"
         scoring_metric = "f1"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "outputfoldertest"
+        run_nickname = "newthresholdtest"
         use_debug_mode = True
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
-                    flare_threshold,
+                    strong_flare_threshold,
                     nan_removal_strategy,
                     scoring_metric,
                     output_folder,
