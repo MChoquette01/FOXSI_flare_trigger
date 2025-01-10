@@ -75,7 +75,7 @@ def make_dir_safe(folder_path):
         pass
 
 class Flare:
-    def __init__(self, db_entry, flux_threshold_letter, flux_threshold_number):
+    def __init__(self, db_entry, use_naive_diffs, flux_threshold_letter, flux_threshold_number):
         flare_id_timestamp = db_entry["FlareID"].split("_")
         self.flare_id = flare_id_timestamp[0]
         self.minutes_from_start = int(flare_id_timestamp[1])
@@ -99,17 +99,27 @@ class Flare:
         self.emission_measure_one_minute_difference = db_entry["EmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure1MinuteDifference"] is not None else None
         self.emission_measure_three_minute_difference = db_entry["EmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure3MinuteDifference"] is not None else None
         self.emission_measure_five_minute_difference = db_entry["EmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure5MinuteDifference"] is not None else None
+        if use_naive_diffs:
+            self.naive_temperature_one_minute_difference = db_entry["NaiveTemperature1MinuteDifference"]
+            self.naive_temperature_three_minute_difference = db_entry["NaiveTemperature3MinuteDifference"]
+            self.naive_temperature_five_minute_difference = db_entry["NaiveTemperature5MinuteDifference"]
+            self.naive_emission_measure_one_minute_difference = db_entry["NaiveEmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure1MinuteDifference"] is not None else None
+            self.naive_emission_measure_three_minute_difference = db_entry["NaiveEmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure3MinuteDifference"] is not None else None
+            self.naive_emission_measure_five_minute_difference = db_entry["NaiveEmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure5MinuteDifference"] is not None else None
         self.xrsa_remaining = db_entry["XRSARemaining"]
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, output_folder, run_nickname, debug_mode):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, debug_mode):
 
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
 
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
+
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"
+    if use_naive_diffs:
+        parsed_flares_dir += "_naive"
 
     # output folders
     make_dir_safe(os.path.join(output_folder, "Parsed Flares"))
@@ -127,45 +137,81 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if not os.path.exists(out_path):
 
         # get flares
-        client, flares_table = tc.connect_to_flares_db()
+        client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
 
         parsed_flares = []
         all_entries = flares_table.find({})
         for record in all_entries:
-            parsed_flares.append(Flare(record, strong_flare_threshold_letter, strong_flare_threshold_number))
+            parsed_flares.append(Flare(record, use_naive_diffs, strong_flare_threshold_letter, strong_flare_threshold_number))
 
         client.close()
 
         tree_data = []
         for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
-                tree_data.append([flare.flare_id,
-                                  flare.current_xrsa,
-                                  flare.xrsa_one_minute_difference,
-                                  flare.xrsa_three_minute_difference,
-                                  flare.xrsa_five_minute_difference,
-                                  flare.current_xrsb,
-                                  flare.xrsb_one_minute_difference,
-                                  flare.xrsb_three_minute_difference,
-                                  flare.xrsb_five_minute_difference,
-                                  flare.temperature,
-                                  flare.temperature_one_minute_difference,
-                                  flare.temperature_three_minute_difference,
-                                  flare.temperature_five_minute_difference,
-                                  flare.emission_measure,
-                                  flare.emission_measure_one_minute_difference,
-                                  flare.emission_measure_three_minute_difference,
-                                  flare.emission_measure_five_minute_difference,
-                                  flare.is_strong_flare]
-                                 )
+                if use_naive_diffs:
+                    tree_data.append([flare.flare_id,
+                                      flare.current_xrsa,
+                                      flare.xrsa_one_minute_difference,
+                                      flare.xrsa_three_minute_difference,
+                                      flare.xrsa_five_minute_difference,
+                                      flare.current_xrsb,
+                                      flare.xrsb_one_minute_difference,
+                                      flare.xrsb_three_minute_difference,
+                                      flare.xrsb_five_minute_difference,
+                                      flare.temperature,
+                                      flare.temperature_one_minute_difference,
+                                      flare.temperature_three_minute_difference,
+                                      flare.temperature_five_minute_difference,
+                                      flare.emission_measure,
+                                      flare.emission_measure_one_minute_difference,
+                                      flare.emission_measure_three_minute_difference,
+                                      flare.emission_measure_five_minute_difference,
+                                      flare.naive_temperature_one_minute_difference,
+                                      flare.naive_temperature_three_minute_difference,
+                                      flare.naive_temperature_five_minute_difference,
+                                      flare.naive_emission_measure_one_minute_difference if flare.naive_emission_measure_one_minute_difference is not None else None,
+                                      flare.naive_emission_measure_three_minute_difference if flare.naive_emission_measure_three_minute_difference is not None else None,
+                                      flare.naive_emission_measure_five_minute_difference if flare.naive_emission_measure_five_minute_difference is not None else None,
+                                      flare.is_strong_flare])
+                else:
+                    tree_data.append([flare.flare_id,
+                                      flare.current_xrsa,
+                                      flare.xrsa_one_minute_difference,
+                                      flare.xrsa_three_minute_difference,
+                                      flare.xrsa_five_minute_difference,
+                                      flare.current_xrsb,
+                                      flare.xrsb_one_minute_difference,
+                                      flare.xrsb_three_minute_difference,
+                                      flare.xrsb_five_minute_difference,
+                                      flare.temperature,
+                                      flare.temperature_one_minute_difference,
+                                      flare.temperature_three_minute_difference,
+                                      flare.temperature_five_minute_difference,
+                                      flare.emission_measure,
+                                      flare.emission_measure_one_minute_difference,
+                                      flare.emission_measure_three_minute_difference,
+                                      flare.emission_measure_five_minute_difference,
+                                      flare.is_strong_flare])
 
         tree_data = pd.DataFrame(np.array(tree_data), dtype=np.float64)
-        tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                             "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                             "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                             "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                             "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                             "EmissionMeasure5MinuteDifference", "IsStrongFlare"]
+        if use_naive_diffs:
+            tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
+                                 "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
+                                 "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
+                                 "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
+                                 "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
+                                 "EmissionMeasure5MinuteDifference", "NaiveTemperature1MinuteDifference",
+                                 "NaiveTemperature3MinuteDifference", "NaiveTemperature5MinuteDifference",
+                                 "NaiveEmissionMeasure1MinuteDifference", "NaiveEmissionMeasure3MinuteDifference",
+                                 "NaiveEmissionMeasure5MinuteDifference" "IsStrongFlare"]
+        else:
+            tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
+                                 "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
+                                 "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
+                                 "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
+                                 "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
+                                 "EmissionMeasure5MinuteDifference", "IsStrongFlare"]
 
         with open(out_path, "wb") as f:
             pickle.dump(tree_data, f)
@@ -181,12 +227,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
-    train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                       "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                       "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                       "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                       "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                       "EmissionMeasure5MinuteDifference"]
+    train_x.columns = list(tree_data.columns)[1:-1]
 
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
@@ -329,6 +370,9 @@ if __name__ == "__main__":
         parser.add_argument('--debug', action='store_true', help="Use to test a quick grid to get results quicker")
         parser.add_argument('--no-debug', dest='debug', action='store_false')
         parser.set_defaults(debug=False)
+        parser.add_argument('--naive', action='store_true', help="Use to parse flares with naive temp/EM differences")
+        parser.add_argument('--no-naive', dest='naive', action='store_false')
+        parser.set_defaults(add_naive=False)
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
@@ -337,6 +381,7 @@ if __name__ == "__main__":
                     scoring_metric=args.m,
                     output_folder=args.o,
                     run_nickname=args.n,
+                    use_naive_diffs=args.naive,
                     debug_mode=args.debug)
 
     # run here
@@ -348,12 +393,15 @@ if __name__ == "__main__":
         scoring_metric = "f1"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
         run_nickname = "newthresholdtest"
+        use_naive_diffs = True
         use_debug_mode = True
+
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     strong_flare_threshold,
                     nan_removal_strategy,
                     scoring_metric,
+                    use_naive_diffs,
                     output_folder,
                     run_nickname,
                     use_debug_mode)
