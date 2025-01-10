@@ -99,24 +99,34 @@ class Flare:
         self.emission_measure_one_minute_difference = db_entry["EmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure1MinuteDifference"] is not None else None
         self.emission_measure_three_minute_difference = db_entry["EmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure3MinuteDifference"] is not None else None
         self.emission_measure_five_minute_difference = db_entry["EmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["EmissionMeasure5MinuteDifference"] is not None else None
+        self.naive_temperature_one_minute_difference = db_entry["NaiveTemperature1MinuteDifference"]
+        self.naive_temperature_three_minute_difference = db_entry["NaiveTemperature3MinuteDifference"]
+        self.naive_temperature_five_minute_difference = db_entry["NaiveTemperature5MinuteDifference"]
+        self.naive_emission_measure_one_minute_difference = db_entry["NaiveEmissionMeasure1MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure1MinuteDifference"] is not None else None
+        self.naive_emission_measure_three_minute_difference = db_entry["NaiveEmissionMeasure3MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure3MinuteDifference"] is not None else None
+        self.naive_emission_measure_five_minute_difference = db_entry["NaiveEmissionMeasure5MinuteDifference"] / (10 ** 30) if db_entry["NaiveEmissionMeasure5MinuteDifference"] is not None else None
         self.xrsa_remaining = db_entry["XRSARemaining"]
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, output_folder, run_nickname, debug_mode):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, debug_mode):
 
     # get flares
-    # client, flares_table = tc.connect_to_flares_db()
+    client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
 
-    # parsed_flares = []
-    # all_entries = flares_table.find({})
-    # for record in all_entries:
-    #     parsed_flares.append(Flare(record))
-    #
-    # client.close()
+    parsed_flares = []
+    all_entries = flares_table.find({})
+    for record in all_entries:
+        parsed_flares.append(Flare(record))
+
+    client.close()
+
 
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
-    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
+    if use_naive_diffs:
+        parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_naive"
+    else:
+        parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
 
     # output folders
     make_dir_safe(os.path.join(output_folder, "Parsed Flares"))
@@ -132,6 +142,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
     if not os.path.exists(out_path):
+        # open naive differences DF
+        with open(os.path.join("Naive Differences", "naive_differences.pkl"), 'rb') as f:
+            naive_differences = pickle.load(f)
         tree_data = []
         for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
@@ -152,6 +165,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                                   flare.emission_measure_one_minute_difference,
                                   flare.emission_measure_three_minute_difference,
                                   flare.emission_measure_five_minute_difference,
+                                  flare.naive_temperature_one_minute_difference,
+                                  flare.naive_temperature_three_minute_difference,
+                                  flare.naive_temperature_five_minute_difference,
+                                  flare.naive_emission_measure_one_minute_difference if flare.naive_emission_measure_one_minute_difference is not None else None,
+                                  flare.naive_emission_measure_three_minute_difference if flare.naive_emission_measure_three_minute_difference is not None else None,
+                                  flare.naive_emission_measure_five_minute_difference if flare.naive_emission_measure_five_minute_difference is not None else None,
                                   flare.is_c5_or_higher]
                                  )
 
@@ -161,7 +180,10 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
                              "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
                              "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
                              "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                             "EmissionMeasure5MinuteDifference", "IsC5OrHigher"]
+                             "EmissionMeasure5MinuteDifference", "NaiveTemperature1MinuteDifference",
+                             "NaiveTemperature3MinuteDifference", "NaiveTemperature5MinuteDifference",
+                             "NaiveEmissionMeasure1MinuteDifference", "NaiveEmissionMeasure3MinuteDifference",
+                             "NaiveEmissionMeasure5MinuteDifference", "IsC5OrHigher"]
 
         with open(out_path, "wb") as f:
             pickle.dump(tree_data, f)
@@ -177,12 +199,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, nan_removal_stra
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
-    train_x.columns = ["CurrentXSRA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                       "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                       "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                       "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                       "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                       "EmissionMeasure5MinuteDifference"]
+    train_x.columns = list(tree_data.columns)[1:-1]
 
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
@@ -324,6 +341,9 @@ if __name__ == "__main__":
         parser.add_argument('--debug', action='store_true', help="Use to test a quick grid to get results quicker")
         parser.add_argument('--no-debug', dest='debug', action='store_false')
         parser.set_defaults(debug=False)
+        parser.add_argument('--naive', action='store_true', help="Use to parse flares with naive temp/EM differences")
+        parser.add_argument('--no-naive', dest='naive', action='store_false')
+        parser.set_defaults(add_naive=False)
         args = parser.parse_args()
         grid_search(peak_filtering_threshold_minutes=args.t,
                     time_minutes=args.s,
@@ -331,6 +351,7 @@ if __name__ == "__main__":
                     scoring_metric=args.m,
                     output_folder=args.o,
                     run_nickname=args.n,
+                    use_naive_diffs=args.naive,
                     debug_mode=args.debug)
 
     # run here
@@ -341,11 +362,15 @@ if __name__ == "__main__":
         scoring_metric = "f1"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
         run_nickname = "outputfoldertest"
+        use_naive_diffs = True
         use_debug_mode = True
+
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     nan_removal_strategy,
                     scoring_metric,
+                    use_naive_diffs,
                     output_folder,
                     run_nickname,
                     use_debug_mode)
+
