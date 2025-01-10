@@ -112,6 +112,17 @@ class Flare:
 
 def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, debug_mode):
 
+    # save for reproducibility
+    inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
+              "time_minutes": time_minutes,
+              "strong_flare_threshold": strong_flare_threshold,
+              "nan_removal_strategy": nan_removal_strategy,
+              "scoring_metric": scoring_metric,
+              "use_naive_diffs": use_naive_diffs,
+              "output_folder": output_folder,
+              "debug_mode": debug_mode,
+              "run_nickname": run_nickname}
+
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
 
@@ -131,6 +142,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Tree Graphs"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters"))
+
+    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"inputs_{time_minutes}.pkl"), "wb") as f:
+        pickle.dump(inputs, f)
 
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
