@@ -42,8 +42,8 @@ def make_metric_plot(old_results, new_results):
 
 
 root_dir = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
-old_version_nickname = "F1_filter_past_peak_flares"
-new_version_nickname = "20_11_2024_interpolation_f1_peak_filter_0"
+old_version_nickname = "2025_01_11_C1_threshold_f1_interpolation"
+new_version_nickname = "2025_01_11_C1_threshold_f1_interpolation_no_filter"
 
 new_results_folderpath = os.path.join(root_dir, new_version_nickname)
 

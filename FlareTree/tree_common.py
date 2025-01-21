@@ -14,12 +14,15 @@ LAUNCH_TIME_MINUTES = 6
 OBSERVATION_TIME_MINUTES = 6
 
 
-def connect_to_flares_db():
+def connect_to_flares_db(use_naive=False):
     """Connect to local MongoDB Flares DB"""
 
     client = MongoClient("mongodb://localhost:27017/")
     flares_db = client["Flares"]
-    flares_table = flares_db["Flares"]
+    if use_naive:
+        flares_table = flares_db["NaiveFlares"]
+    else:
+        flares_table = flares_db["Flares"]
 
     return client, flares_table
 
@@ -35,6 +38,25 @@ def flare_c5_or_higher(flux_level):
             return False
         else:
             return True
+
+
+def is_flare_strong(test_flux_level, threshold_letter_level="C", threshold_number_level=5.0):
+
+    ordered_letter_classes = ["A", "B", "C", "M", "X"]
+    threshold_flare_letter_index = ordered_letter_classes.index(threshold_letter_level)
+
+    test_flux_level_letter_index = ordered_letter_classes.index(test_flux_level[0])
+    # test flare is weaker
+    if test_flux_level_letter_index < threshold_flare_letter_index:
+        return False
+    # test flare is stronger
+    elif test_flux_level_letter_index > threshold_flare_letter_index:
+        return True
+    # test flare is the same letter class
+    if float(test_flux_level[1:]) < float(threshold_number_level):
+        return False
+    else:
+        return True
 
 
 def get_training_and_test_sets(tree_data, train_proportion=0.8):

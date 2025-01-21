@@ -34,10 +34,10 @@ def do_interpolate(to_interpolate, flare_ids, variable_name):
         pickle.dump(x, f)
 
 
-def create_interpolated_table_for_timestamp():
+def create_interpolated_table_for_timestamp(use_naive_diffs=False):
 
     uninterpolated_values = defaultdict(list)
-    client, flares_table = tc.connect_to_flares_db()
+    client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
     # get unique flare IDs
     flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
     for flare_id in flare_ids:
@@ -64,6 +64,13 @@ def create_interpolated_table_for_timestamp():
             this_record["XRSB1MinuteDifference"].append(flare_entry["XRSB1MinuteDifference"])
             this_record["XRSB3MinuteDifference"].append(flare_entry["XRSB3MinuteDifference"])
             this_record["XRSB5MinuteDifference"].append(flare_entry["XRSB5MinuteDifference"])
+            if use_naive_diffs:
+                this_record["NaiveTemperature1MinuteDifference"].append(flare_entry["NaiveTemperature1MinuteDifference"])
+                this_record["NaiveTemperature3MinuteDifference"].append(flare_entry["NaiveTemperature3MinuteDifference"])
+                this_record["NaiveTemperature5MinuteDifference"].append(flare_entry["NaiveTemperature5MinuteDifference"])
+                this_record["NaiveEmissionMeasure1MinuteDifference"].append(flare_entry["NaiveEmissionMeasure1MinuteDifference"])
+                this_record["NaiveEmissionMeasure3MinuteDifference"].append(flare_entry["NaiveEmissionMeasure3MinuteDifference"])
+                this_record["NaiveEmissionMeasure5MinuteDifference"].append(flare_entry["NaiveEmissionMeasure5MinuteDifference"])
         # add this flare's values to the running list
         uninterpolated_values["Temperature"].append(this_record["Temperature"])
         uninterpolated_values["Temperature1MinuteDifference"].append(this_record["Temperature1MinuteDifference"])
@@ -81,6 +88,13 @@ def create_interpolated_table_for_timestamp():
         uninterpolated_values["XRSB1MinuteDifference"].append(this_record["XRSB1MinuteDifference"])
         uninterpolated_values["XRSB3MinuteDifference"].append(this_record["XRSB3MinuteDifference"])
         uninterpolated_values["XRSB5MinuteDifference"].append(this_record["XRSB5MinuteDifference"])
+        if use_naive_diffs:
+            uninterpolated_values["NaiveTemperature1MinuteDifference"].append(this_record["NaiveTemperature1MinuteDifference"])
+            uninterpolated_values["NaiveTemperature3MinuteDifference"].append(this_record["NaiveTemperature3MinuteDifference"])
+            uninterpolated_values["NaiveTemperature5MinuteDifference"].append(this_record["NaiveTemperature5MinuteDifference"])
+            uninterpolated_values["NaiveEmissionMeasure1MinuteDifference"].append(this_record["NaiveEmissionMeasure1MinuteDifference"])
+            uninterpolated_values["NaiveEmissionMeasure3MinuteDifference"].append(this_record["NaiveEmissionMeasure3MinuteDifference"])
+            uninterpolated_values["NaiveEmissionMeasure5MinuteDifference"].append(this_record["NaiveEmissionMeasure5MinuteDifference"])
     client.close()
 
     # do the actual interpolating
@@ -100,8 +114,16 @@ def create_interpolated_table_for_timestamp():
     do_interpolate(uninterpolated_values["XRSB1MinuteDifference"], flare_ids, "XRSB1MinuteDifference")
     do_interpolate(uninterpolated_values["XRSB3MinuteDifference"], flare_ids, "XRSB3MinuteDifference")
     do_interpolate(uninterpolated_values["XRSB5MinuteDifference"], flare_ids, "XRSB5MinuteDifference")
+    if use_naive_diffs:
+        do_interpolate(uninterpolated_values["NaiveTemperature1MinuteDifference"], flare_ids, "NaiveTemperature1MinuteDifference")
+        do_interpolate(uninterpolated_values["NaiveTemperature3MinuteDifference"], flare_ids, "NaiveTemperature3MinuteDifference")
+        do_interpolate(uninterpolated_values["NaiveTemperature5MinuteDifference"], flare_ids, "NaiveTemperature5MinuteDifference")
+        do_interpolate(uninterpolated_values["NaiveEmissionMeasure1MinuteDifference"], flare_ids, "NaiveEmissionMeasure1MinuteDifference")
+        do_interpolate(uninterpolated_values["NaiveEmissionMeasure3MinuteDifference"], flare_ids, "NaiveEmissionMeasure3MinuteDifference")
+        do_interpolate(uninterpolated_values["NaiveEmissionMeasure5MinuteDifference"], flare_ids, "NaiveEmissionMeasure5MinuteDifference")
 
 
 if __name__ == "__main__":
 
-    create_interpolated_table_for_timestamp()
+    use_naive_diffs = True
+    create_interpolated_table_for_timestamp(use_naive_diffs)
