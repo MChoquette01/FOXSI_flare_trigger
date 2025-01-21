@@ -1,5 +1,5 @@
 from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.metrics import  confusion_matrix, precision_score, recall_score, f1_score, make_scorer, ConfusionMatrixDisplay
+from sklearn.metrics import  confusion_matrix, precision_score, recall_score, f1_score, balanced_accuracy_score, make_scorer, ConfusionMatrixDisplay
 from sklearn.model_selection import GridSearchCV
 from datetime import datetime
 import pandas as pd
@@ -9,6 +9,7 @@ import pickle
 import os
 import math
 from tqdm import tqdm
+import re
 import argparse
 import sys
 import tree_common as tc
@@ -66,6 +67,29 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     # plt.show()
 
 
+def get_delay_informed_outputs(target_outputs, input_flare_ids):
+    """Set any y-variables that cannot be observed given launch delays a value of 0.0"""
+
+    target_outputs_list = [x[0] for x in target_outputs.values.tolist()]
+
+    client, flares_table = tc.connect_to_flares_db()
+
+    filter = {'FlareID': re.compile(r"_0$")}
+    project = {'FlareID': 1, 'MinutesToPeak': 1}
+    cursor = client['Flares']['Flares'].find(filter=filter, projection=project)
+    flare_ids_and_minutes_to_peak = {}
+    for result in cursor:
+        flare_ids_and_minutes_to_peak[result['FlareID'].split('_')[0]] = result['MinutesToPeak'] - 15
+
+    client.close()
+
+    for idx, (flare_id, test_prediction) in enumerate(zip(input_flare_ids, target_outputs_list)):
+        if not tc.LAUNCH_TIME_MINUTES <= flare_ids_and_minutes_to_peak[str(int(flare_id))] <= tc.LAUNCH_TIME_MINUTES + tc.OBSERVATION_TIME_MINUTES:
+            target_outputs_list[idx] = 0.0
+
+    return pd.DataFrame(np.array(target_outputs_list))
+
+
 def make_dir_safe(folder_path):
     """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
     try:
@@ -110,7 +134,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, debug_mode):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, use_science_delay, debug_mode):
 
     # save for reproducibility
     inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
@@ -121,6 +145,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
               "use_naive_diffs": use_naive_diffs,
               "output_folder": output_folder,
               "debug_mode": debug_mode,
+              "use_science_delay": use_science_delay,
               "run_nickname": run_nickname}
 
     strong_flare_threshold_letter = strong_flare_threshold[0]
@@ -143,7 +168,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Tree Graphs"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters"))
 
-    with open(os.path.join("Results", run_nickname, "Optimal Tree Hyperparameters", f"inputs_{time_minutes}.pkl"), "wb") as f:
+    with open(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters", f"inputs_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(inputs, f)
 
     results = []  # store best params for each timestamp
@@ -218,7 +243,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                  "EmissionMeasure5MinuteDifference", "NaiveTemperature1MinuteDifference",
                                  "NaiveTemperature3MinuteDifference", "NaiveTemperature5MinuteDifference",
                                  "NaiveEmissionMeasure1MinuteDifference", "NaiveEmissionMeasure3MinuteDifference",
-                                 "NaiveEmissionMeasure5MinuteDifference" "IsStrongFlare"]
+                                 "NaiveEmissionMeasure5MinuteDifference", "IsStrongFlare"]
         else:
             tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
                                  "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
@@ -236,7 +261,11 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if nan_removal_strategy == "linear_interpolation":
         tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
-    train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
+    train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = tc.get_training_and_test_sets(tree_data)
+
+    if use_science_delay:
+        train_y = get_delay_informed_outputs(train_y, test_x_flare_ids)
+        test_y = get_delay_informed_outputs(test_y, test_x_flare_ids)
 
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
@@ -252,7 +281,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                   "min_samples_split": [x for x in range(4, 5)],
                   "min_samples_leaf": [x for x in range(1, 2)],
                   "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                  "max_features": [x for x in range(2, 4)],
+                  "max_features": [x for x in range(5, 17)],
                   "class_weight": ["balanced"]}
     else:
         # Real deal parameters
@@ -270,9 +299,11 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         tn, fp, fn, tp = cm.ravel()
         return fp / (tn + fp)
 
+
     fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
     if scoring_metric == "false_positive_rate":
         scoring_metric = fpr_scorer
+
     gs = GridSearchCV(t, params, scoring=scoring_metric)
     gs.fit(train_x.values, train_y.values)
     best_params = gs.best_params_
@@ -384,6 +415,9 @@ if __name__ == "__main__":
         parser.add_argument('--debug', action='store_true', help="Use to test a quick grid to get results quicker")
         parser.add_argument('--no-debug', dest='debug', action='store_false')
         parser.set_defaults(debug=False)
+        parser.add_argument('--scienceDelay', action='store_true', help="Only receords that can be observed given science delays are treated as positive")
+        parser.add_argument('--no-scienceDelay', dest='scienceDelay', action='store_false')
+        parser.set_defaults(debug=False)
         parser.add_argument('--naive', action='store_true', help="Use to parse flares with naive temp/EM differences")
         parser.add_argument('--no-naive', dest='naive', action='store_false')
         parser.set_defaults(add_naive=False)
@@ -395,21 +429,22 @@ if __name__ == "__main__":
                     scoring_metric=args.m,
                     output_folder=args.o,
                     run_nickname=args.n,
+                    use_science_delay=args.scienceDelay,
                     use_naive_diffs=args.naive,
                     debug_mode=args.debug)
 
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 20
+        time_minutes = 23
         strong_flare_threshold = "M1.0"  # inclusive to strong flares
         nan_removal_strategy = "mean"
-        scoring_metric = "f1"
+        scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "newthresholdtest"
+        run_nickname = "scorefortimemergetest"
+        use_science_delay = True
         use_naive_diffs = True
         use_debug_mode = True
-
         grid_search(peak_filtering_threshold_minutes,
                     time_minutes,
                     strong_flare_threshold,
@@ -418,4 +453,5 @@ if __name__ == "__main__":
                     use_naive_diffs,
                     output_folder,
                     run_nickname,
+                    use_science_delay,
                     use_debug_mode)
