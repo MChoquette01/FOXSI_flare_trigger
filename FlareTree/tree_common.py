@@ -10,6 +10,8 @@ import pickle
 """Common utilities for decision trees"""
 
 RANDOM_STATE = 102024
+LAUNCH_TIME_MINUTES = 6
+OBSERVATION_TIME_MINUTES = 6
 
 
 def connect_to_flares_db():
