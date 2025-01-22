@@ -176,16 +176,16 @@ def graph_feature_importance(minutes_since_start, peak_filtering_minutes):
     # plt.show()
 
 
-def graph_flare_count(results):
+def graph_flare_count(results, strong_flare_threshold):
     """Graph the flare count over all timestamps"""
 
     xs = [int(x) for x in results.minutes_since_start.to_list()]
-    weak_flare_count = [int(x) for x in results["number_of_<C5_flares"]]
-    strong_flare_count = [int(x) for x in results["number_of_>=C5_flares"]]
+    weak_flare_count = [int(x) for x in results["number_of_strong_flares"]]
+    strong_flare_count = [int(x) for x in results["number_of_strong_flares"]]
     total_number_of_flares = [int(x) for x in results.total_number_of_flares]
     plt.figure(figsize=(16, 9))
-    plt.plot(xs, weak_flare_count, color="red", label="<C5 Count")
-    plt.plot(xs, strong_flare_count, color="green", label=">=C5 Count")
+    plt.plot(xs, weak_flare_count, color="red", label=f"<{strong_flare_threshold} Count")
+    plt.plot(xs, strong_flare_count, color="green", label=f">={strong_flare_threshold} Count")
     plt.plot(xs, total_number_of_flares, color="black", label="Total")
     plt.xlabel("Minutes Since Start")
     plt.title("Count of Flares")
@@ -194,9 +194,11 @@ def graph_flare_count(results):
     # plt.show()
 
 
-results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\Results"
-run_nickname = "15_12_2024_naivedifftest"
-peak_filtering_minutes = 0
+results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
+run_nickname = "2025_01_11_C1_threshold_f1_interpolation_no_filter"
+inputs = tc.get_inputs_dict(results_folderpath, run_nickname)
+peak_filtering_minutes = inputs['peak_filtering_threshold_minutes']
+strong_flare_threshold = inputs['strong_flare_threshold']
 
 results = tc.get_results_pickle(results_folderpath, run_nickname)
 
@@ -206,8 +208,8 @@ if not os.path.exists(out_dir):
 
 make_param_plot()
 make_metric_plot()
-graph_flare_count(results)
+graph_flare_count(results, strong_flare_threshold)
 graph_nan_frequency(results, peak_filtering_minutes)
-for timestamp in results.minutes_since_start.tolist():
-    make_confusion_matrix(results, minutes_since_start=int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
-    graph_feature_importance(minutes_since_start=int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
+# for timestamp in results.minutes_since_start.tolist():
+#     make_confusion_matrix(results, minutes_since_start=int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
+#     graph_feature_importance(minutes_since_start=int(timestamp), peak_filtering_minutes=peak_filtering_minutes)

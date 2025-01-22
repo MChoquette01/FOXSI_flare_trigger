@@ -3,6 +3,7 @@ import pickle
 from sklearn.metrics import precision_score, recall_score, f1_score, confusion_matrix
 import tree_common as tc
 import numpy as np
+import os
 
 
 # GUI to tweak tree hyperparameters to visualize how classifications results/scores change
@@ -40,7 +41,6 @@ def get_metrics(t, train_x, train_y, test_x, test_y):
 
     return scores
 
-
 psg.theme("Reddit")
 
 training_metrics_str = ""
@@ -48,33 +48,42 @@ test_metrics_str = ""
 training_cm_text = ""
 test_cm_text = ""
 
-layout = [[psg.FileBrowse("Choose Results Pickle", enable_events=True, key="Choose Results Pickle")],
-          [psg.Frame("Updater", [[psg.Text(f"Training: {training_metrics_str}", key="Training Text")],
-                                 [psg.Text(f"Test: {test_metrics_str}", key="Test Text")],
-                                 [psg.Text("Minutes From Flare Start", key="Minutes From Start"), psg.Slider((-5, 3), orientation='horizontal', key='Minutes From Start Slider')],
+layout = [[psg.FolderBrowse("Choose Outputs Directory", enable_events=True, key="Choose Outputs Directory")],
+          [psg.Frame("Updater", [[psg.Text(f"Training: {training_metrics_str}", key="Training Text"), psg.Text("Training CM: ", key="Training CM Label"), psg.Text(training_cm_text, key='Training CM Text')],
+                                 [psg.Text(f"Test: {test_metrics_str}", key="Test Text"), psg.Text("Test CM: ", key="Test CM Label"), psg.Text(test_cm_text, key='Test CM Text')],
+                                 [psg.Text("Minutes From Flare Start", key="Minutes From Start"), psg.Slider((-5, 15), orientation='horizontal', key='Minutes From Start Slider')],
+                                 [psg.Text("Strong Flare Threshold Label", key='Threshold Text'), psg.Text("C5.0", key="Strong Flare Threshold")],
                                  [psg.Button("Get Best For Timestamp", key="Get Best For Timestamp")],
+                                 [psg.Text("Scoring Metric", key="Scoring Metric Label"), psg.Text("undefined", key="Scoring Metric Text")],
+                                 [psg.Text("NaN Removal Method"), psg.Text("undefined", key="NaN Removal Method Text")],
                                  [psg.Text("Loss Method", key="Loss Label"), psg.Radio('Gini', group_id=1, key='gini', default=True), psg.Radio('Entropy', group_id=1, key='entropy')],
+                                 [psg.Text("Naive", key="Naive Label"), psg.Checkbox("Naive Differences", key="Naive Differences Checkbox")],
+                                 [psg.Text("Science Delays", key="Science Delays Label"), psg.Checkbox("Science Delays", key="Science Delays Checkbox")],
+                                 [psg.Text("Filter Post-Peak", key="Filter Label"), psg.Input(0, key="Filter Peaked Flares Input")],
                                  [psg.Text("Max Depth", key="Max Depth Label"), psg.Slider((1, 30), orientation='horizontal', key="Max Depth Slider")],
-                                 [psg.Text("Max Features", key="Max Depth Label"), psg.Slider((1, 18), orientation='horizontal', key="Max Features Slider")],
-                                 [psg.Text("Min Samples Leaf", key="Min Samples Leaf Label"), psg.Slider((1, 30), orientation='horizontal', key="Min Samples Leaf Slider")],
-                                 [psg.Text("Min Samples Split", key="Min Samples Split Label"), psg.Slider((1, 30), orientation='horizontal', key="Min Samples Split Slider")],
+                                 [psg.Text("Max Features", key="Max Depth Label"), psg.Slider((1, 23), orientation='horizontal', key="Max Features Slider")],
+                                 [psg.Text("Min Samples Leaf", key="Min Samples Leaf Label"), psg.Slider((1, 75), orientation='horizontal', key="Min Samples Leaf Slider")],
+                                 [psg.Text("Min Samples Split", key="Min Samples Split Label"), psg.Slider((1, 75), orientation='horizontal', key="Min Samples Split Slider")],
                                  [psg.Text("Min Weight Fraction Leaf", key="Min Weight Fraction Leaf Label"), psg.Slider((0.0, 0.5), resolution=0.1, orientation='horizontal', key="Min Weight Fraction Leaf Slider")],
                                  [psg.Text("CCP Alpha", key="CCP Alpha Label"), psg.Slider((0, 1.0), resolution=0.1, orientation='horizontal', key="CCP Alpha Slider")],
-                                 [psg.Button("Update Tree", key="Update Tree")],
-                                 [psg.Text("Training CM: ", key="Training CM Label"), psg.Text(training_cm_text, key='Training CM Text')],
-                                 [psg.Text("Test CM: ", key="Test CM Label"), psg.Text(test_cm_text, key='Test CM Text')]], key="Update Frame", visible=False)]]
+                                 [psg.Button("Update Tree", key="Update Tree")]], key="Update Frame", visible=False)]]
 
 window = psg.Window(title="Pruner", layout=layout, margins=(100, 50))
 
 # Create an event loop
 while True:
     event, values = window.read()
-    if event == "Choose Results Pickle":
-        results_filepath = values["Choose Results Pickle"]
+    if event == "Choose Outputs Directory":
+        results_folderpath = values["Choose Outputs Directory"]
+        results_base_dir, run_nickname = os.path.split(results_folderpath)
+        if not os.path.exists(os.path.join(results_folderpath, "results.pkl")):
+            tc.merge_results_files(results_base_dir, run_nickname)
+        results_filepath = os.path.join(results_folderpath, "results.pkl")
         with open(results_filepath, "rb") as f:
             results = pickle.load(f)
-        t = tc.create_tree_from_df(results, minutes_since_start=10, max_depth_override=None, ccp_alpha=0.0)
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start=10, peak_filtering_minutes=0)
+        t = tc.get_tree(results_folderpath, minutes_since_flare_start=10, trained=True)
+        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start=10, strong_flare_threshold="C5.0", use_naive_diffs=True,
+                                         peak_filtering_minutes=0)
         scores = get_metrics(t, train_x, train_y, test_x, test_y)
         training_metrics_str = f"Precision: {round(scores['Training']['Precision'], 3)}, " \
                                f"Recall: {round(scores['Training']['Recall'], 3)}," \
@@ -98,6 +107,16 @@ while True:
         window["Min Weight Fraction Leaf Slider"].update(value=float(relevant_row.min_weight_fraction_leaf.iloc[0]))
         window["CCP Alpha Slider"].update(value=0)
 
+        # inputs
+        inputs = tc.get_inputs_dict(results_base_dir, run_nickname)
+        window["Minutes From Start Slider"].update(0)
+        window["Strong Flare Threshold"].update(inputs["strong_flare_threshold"])
+        window["Naive Differences Checkbox"].update(inputs["use_naive_diffs"])
+        window["Filter Peaked Flares Input"].update(inputs["peak_filtering_threshold_minutes"])
+        # window["Science Delays Checkbox"].update(inputs["use_science_delays"])
+        window["Scoring Metric Text"].update(inputs["scoring_metric"])
+        window["NaN Removal Method Text"].update(inputs["nan_removal_strategy"])
+
         train_predictions = t.predict(train_x)
         train_cm = confusion_matrix(train_y, train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
@@ -111,6 +130,13 @@ while True:
         window["Test CM Text"].update(value=test_cm_str)
         window.Refresh()
     elif event == "Update Tree":
+        # get updated input choices
+        parsed_flares_dir = f"peak_threshold_minutes_{values['Filter Peaked Flares Input']}_threshold_{inputs['strong_flare_threshold']}"
+        if values["Naive Differences Checkbox"]:
+            parsed_flares_dir += "_naive"
+
+        out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{int(values['Minutes From Start Slider'] + 15)}_minutes_since_start.pkl")
+
         # find chosen split criteria
         for split_method in ['gini', 'entropy']:
             if values[split_method]:
@@ -124,7 +150,19 @@ while True:
                            float(values["Min Weight Fraction Leaf Slider"]),
                            float(values["CCP Alpha Slider"]))
 
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start=int(values['Minutes From Start Slider'] + 15), peak_filtering_minutes=0)
+        with open(out_path, "rb") as f:
+            tree_data = pickle.load(f)
+
+        if inputs["nan_removal_strategy"] == "linear_interpolation":
+            tree_data = tc.linear_interpolation(tree_data, int(values['Minutes From Start Slider'] + 15))
+
+        train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
+
+        if inputs["nan_removal_strategy"] != "linear_interpolation":
+            train_x, test_x = tc.impute_variable_data(train_x, test_x, inputs["nan_removal_strategy"])
+
+        train_x.columns = list(tree_data.columns)[1:-1]
+
         scores = get_metrics(t, train_x, train_y, test_x, test_y)
         training_metrics_str = f"Precision: {round(scores['Training']['Precision'], 3)}, " \
                                f"Recall: {round(scores['Training']['Recall'], 3)}," \
@@ -165,6 +203,15 @@ while True:
         window["Min Samples Split Slider"].update(value=int(relevant_row.min_samples_split.iloc[0]))
         window["Min Weight Fraction Leaf Slider"].update(value=float(relevant_row.min_weight_fraction_leaf.iloc[0]))
         window["CCP Alpha Slider"].update(value=0)
+
+        # inputs
+        inputs = tc.get_inputs_dict(results_base_dir, run_nickname)
+        window["Strong Flare Threshold"].update(inputs["strong_flare_threshold"])
+        window["Naive Differences Checkbox"].update(inputs["use_naive_diffs"])
+        window["Filter Peaked Flares Input"].update(inputs["peak_filtering_threshold_minutes"])
+        # window["Science Delays Checkbox"].update(inputs["use_science_delays"])
+        window["Scoring Metric Text"].update(inputs["scoring_metric"])
+        window["NaN Removal Method Text"].update(inputs["nan_removal_strategy"])
     elif event == "OK" or event == psg.WIN_CLOSED:
         break
 

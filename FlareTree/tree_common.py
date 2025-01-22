@@ -27,6 +27,29 @@ def connect_to_flares_db(use_naive=False):
     return client, flares_table
 
 
+def get_tree(results_dir, minutes_since_flare_start, trained=True):
+
+    if trained:
+        filename = f"trained_{int(minutes_since_flare_start) - 15}_minutes_since_start"
+    else:
+        filename = f"untrained_{int(minutes_since_flare_start) - 15}_minutes_since_start"
+
+    with open(os.path.join(results_dir, "Trees", filename), 'rb') as f:
+        tree = pickle.load(f)
+
+    return tree
+
+
+def get_inputs_dict(results_folderpath, run_nickname):
+
+    for root, dirs, files in os.walk(os.path.join(results_folderpath, run_nickname)):
+        for file in files:
+            if 'inputs_11' in file:
+                with open(os.path.join(root, file), 'rb') as f:
+                    inputs = pickle.load(f)
+                    return inputs
+
+
 def flare_c5_or_higher(flux_level):
 
     if flux_level[0] == "A" or flux_level[0] == "B":
@@ -78,9 +101,16 @@ def get_training_and_test_sets(tree_data, train_proportion=0.8):
     return train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y
 
 
-def get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=0):
+def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0):
 
-    data_filepath = os.path.join("Parsed Flares", f"peak_threshold_minutes_{peak_filtering_minutes}", f"{minutes_since_start}_minutes_since_start.pkl")
+    # peak_threshold_minutes_-10000_threshold_M1.0_naive
+    strong_flare_threshold_letter = strong_flare_threshold[0]
+    strong_flare_threshold_number = strong_flare_threshold[1:]
+    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"
+    if use_naive_diffs:
+        parsed_flares_dir += "_naive"
+
+    data_filepath = os.path.join("Parsed Flares", parsed_flares_dir, f"{minutes_since_start}_minutes_since_start.pkl")
     with open(data_filepath, "rb") as f:
         tree_data = pickle.load(f)
 
@@ -92,7 +122,7 @@ def linear_interpolation(input_data, minutes_since_start):
     """Linearly interpolates missing data in <input_data>. Uses lookup tables created by imputer.py"""
 
     for column_name in input_data.columns:
-        if column_name != "FlareID" and column_name != "IsC5OrHigher":
+        if column_name != "FlareID" and column_name != "IsStrongFlare":
             col = input_data[column_name]
             if col.isna().sum() != 0:
                 lookup_table_path = os.path.join("Interpolations", f"{column_name}.pkl")
