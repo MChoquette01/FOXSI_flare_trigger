@@ -10,7 +10,7 @@ import pickle
 """Common utilities for decision trees"""
 
 RANDOM_STATE = 102024
-LAUNCH_TIME_MINUTES = 6
+LAUNCH_TIME_MINUTES = 8
 OBSERVATION_TIME_MINUTES = 6
 
 
