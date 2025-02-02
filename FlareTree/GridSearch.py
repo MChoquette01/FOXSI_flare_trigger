@@ -67,29 +67,6 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     # plt.show()
 
 
-def get_delay_informed_outputs(target_outputs, input_flare_ids):
-    """Set any y-variables that cannot be observed given launch delays a value of 0.0"""
-
-    target_outputs_list = [x[0] for x in target_outputs.values.tolist()]
-
-    client, flares_table = tc.connect_to_flares_db()
-
-    filter = {'FlareID': re.compile(r"_0$")}
-    project = {'FlareID': 1, 'MinutesToPeak': 1}
-    cursor = client['Flares']['Flares'].find(filter=filter, projection=project)
-    flare_ids_and_minutes_to_peak = {}
-    for result in cursor:
-        flare_ids_and_minutes_to_peak[result['FlareID'].split('_')[0]] = result['MinutesToPeak'] - 15
-
-    client.close()
-
-    for idx, (flare_id, test_prediction) in enumerate(zip(input_flare_ids, target_outputs_list)):
-        if not tc.LAUNCH_TIME_MINUTES <= flare_ids_and_minutes_to_peak[str(int(flare_id))] <= tc.LAUNCH_TIME_MINUTES + tc.OBSERVATION_TIME_MINUTES:
-            target_outputs_list[idx] = 0.0
-
-    return pd.DataFrame(np.array(target_outputs_list))
-
-
 def make_dir_safe(folder_path):
     """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
     try:
@@ -134,7 +111,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, use_science_delay, debug_mode):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, use_science_delay, debug_mode, stratify=True):
 
     # save for reproducibility
     inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
@@ -146,7 +123,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
               "output_folder": output_folder,
               "debug_mode": debug_mode,
               "use_science_delay": use_science_delay,
-              "run_nickname": run_nickname}
+              "run_nickname": run_nickname,
+              "stratify": stratify}
 
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
@@ -186,10 +164,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         client.close()
 
         tree_data = []
+        flare_classes = []  # handle separately because these are strings, not ints
         for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
+                flare_classes.append([flare.flare_class])
                 if use_naive_diffs:
                     tree_data.append([flare.flare_id,
+                                      flare.minutes_to_peak,
                                       flare.current_xrsa,
                                       flare.xrsa_one_minute_difference,
                                       flare.xrsa_three_minute_difference,
@@ -215,6 +196,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                       flare.is_strong_flare])
                 else:
                     tree_data.append([flare.flare_id,
+                                      flare.minutes_to_peak,
                                       flare.current_xrsa,
                                       flare.xrsa_one_minute_difference,
                                       flare.xrsa_three_minute_difference,
@@ -234,23 +216,31 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                       flare.is_strong_flare])
 
         tree_data = pd.DataFrame(np.array(tree_data), dtype=np.float64)
+        targets = tree_data.iloc[:, -1:]
+        tree_data.drop(tree_data.columns[-1], axis=1, inplace=True)
+        # flare class is not numeric...handle separately
+        flare_classes = pd.DataFrame(np.array(flare_classes))
+        tree_data = pd.concat([tree_data, flare_classes, targets], axis=1)
+
         if use_naive_diffs:
-            tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                                 "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                                 "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                                 "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                                 "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                                 "EmissionMeasure5MinuteDifference", "NaiveTemperature1MinuteDifference",
-                                 "NaiveTemperature3MinuteDifference", "NaiveTemperature5MinuteDifference",
-                                 "NaiveEmissionMeasure1MinuteDifference", "NaiveEmissionMeasure3MinuteDifference",
-                                 "NaiveEmissionMeasure5MinuteDifference", "IsStrongFlare"]
+            tree_data.columns = ["FlareID", "MinutesToPeak", "CurrentXRSA", "XRSA1MinuteDifference",
+                                 "XRSA3MinuteDifference", "XRSA5MinuteDifference", "CurrentXRSB",
+                                 "XRSB1MinuteDifference", "XRSB3MinuteDifference", "XRSB5MinuteDifference",
+                                 "Temperature", "Temperature1MinuteDifference", "Temperature3MinuteDifference",
+                                 "Temperature5MinuteDifference", "EmissionMeasure", "EmissionMeasure1MinuteDifference",
+                                 "EmissionMeasure3MinuteDifference", "EmissionMeasure5MinuteDifference",
+                                 "NaiveTemperature1MinuteDifference", "NaiveTemperature3MinuteDifference",
+                                 "NaiveTemperature5MinuteDifference", "NaiveEmissionMeasure1MinuteDifference",
+                                 "NaiveEmissionMeasure3MinuteDifference", "NaiveEmissionMeasure5MinuteDifference",
+                                 "FlareClass", "IsStrongFlare"]
         else:
-            tree_data.columns = ["FlareID", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA3MinuteDifference",
-                                 "XRSA5MinuteDifference", "CurrentXRSB", "XRSB1MinuteDifference", "XRSB3MinuteDifference",
-                                 "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
-                                 "Temperature3MinuteDifference", "Temperature5MinuteDifference", "EmissionMeasure",
-                                 "EmissionMeasure1MinuteDifference", "EmissionMeasure3MinuteDifference",
-                                 "EmissionMeasure5MinuteDifference", "IsStrongFlare"]
+            tree_data.columns = ["FlareID", "MinutesToPeak", "CurrentXRSA", "XRSA1MinuteDifference",
+                                 "XRSA3MinuteDifference", "XRSA5MinuteDifference", "CurrentXRSB",
+                                 "XRSB1MinuteDifference", "XRSB3MinuteDifference", "XRSB5MinuteDifference",
+                                 "Temperature", "Temperature1MinuteDifference", "Temperature3MinuteDifference",
+                                 "Temperature5MinuteDifference", "EmissionMeasure", "EmissionMeasure1MinuteDifference",
+                                 "EmissionMeasure3MinuteDifference", "EmissionMeasure5MinuteDifference",
+                                 "FlareClass", "IsStrongFlare"]
 
         with open(out_path, "wb") as f:
             pickle.dump(tree_data, f)
@@ -261,16 +251,15 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if nan_removal_strategy == "linear_interpolation":
         tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
-    train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = tc.get_training_and_test_sets(tree_data)
-
-    if use_science_delay:
-        train_y = get_delay_informed_outputs(train_y, test_x_flare_ids)
-        test_y = get_delay_informed_outputs(test_y, test_x_flare_ids)
+    if stratify:
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
+    else:
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
 
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
 
-    train_x.columns = list(tree_data.columns)[1:-1]
+    train_x.columns = list(tree_data.columns)[2:-2]
 
     t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
 
@@ -436,12 +425,12 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 23
-        strong_flare_threshold = "M1.0"  # inclusive to strong flares
+        time_minutes = 20
+        strong_flare_threshold = "C5.0"  # inclusive to strong flares
         nan_removal_strategy = "mean"
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "scorefortimemergetest"
+        run_nickname = "stratify_test"
         use_science_delay = True
         use_naive_diffs = True
         use_debug_mode = True

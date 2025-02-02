@@ -59,6 +59,7 @@ layout = [[psg.FolderBrowse("Choose Outputs Directory", enable_events=True, key=
                                  [psg.Text("Loss Method", key="Loss Label"), psg.Radio('Gini', group_id=1, key='gini', default=True), psg.Radio('Entropy', group_id=1, key='entropy')],
                                  [psg.Text("Naive", key="Naive Label"), psg.Checkbox("Naive Differences", key="Naive Differences Checkbox")],
                                  [psg.Text("Science Delays", key="Science Delays Label"), psg.Checkbox("Science Delays", key="Science Delays Checkbox")],
+                                 [psg.Text("Stratified Sampling", key="Stratified Label"), psg.Checkbox("Stratified Sampling", key="Stratified Checkbox")],
                                  [psg.Text("Filter Post-Peak", key="Filter Label"), psg.Input(0, key="Filter Peaked Flares Input")],
                                  [psg.Text("Max Depth", key="Max Depth Label"), psg.Slider((1, 30), orientation='horizontal', key="Max Depth Slider")],
                                  [psg.Text("Max Features", key="Max Depth Label"), psg.Slider((1, 23), orientation='horizontal', key="Max Features Slider")],
@@ -113,7 +114,8 @@ while True:
         window["Strong Flare Threshold"].update(inputs["strong_flare_threshold"])
         window["Naive Differences Checkbox"].update(inputs["use_naive_diffs"])
         window["Filter Peaked Flares Input"].update(inputs["peak_filtering_threshold_minutes"])
-        # window["Science Delays Checkbox"].update(inputs["use_science_delays"])
+        window["Science Delays Checkbox"].update(inputs["use_science_delays"])
+        window["Stratified Checkbox"].update(inputs["stratified"])
         window["Scoring Metric Text"].update(inputs["scoring_metric"])
         window["NaN Removal Method Text"].update(inputs["nan_removal_strategy"])
 
