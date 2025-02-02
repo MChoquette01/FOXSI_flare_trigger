@@ -44,7 +44,7 @@ def get_inputs_dict(results_folderpath, run_nickname):
 
     for root, dirs, files in os.walk(os.path.join(results_folderpath, run_nickname)):
         for file in files:
-            if 'inputs_11' in file:
+            if 'inputs' in file:
                 with open(os.path.join(root, file), 'rb') as f:
                     inputs = pickle.load(f)
                     return inputs
@@ -82,7 +82,19 @@ def is_flare_strong(test_flux_level, threshold_letter_level="C", threshold_numbe
         return True
 
 
-def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8):
+def get_delay_informed_outputs(target_outputs, additional_flare_data):
+    """Set any y-variables that cannot be observed given launch delays a value of 0.0"""
+
+    target_outputs_list = [x[0] for x in target_outputs.values.tolist()]
+
+    for idx, row in additional_flare_data.iterrows():
+        if not LAUNCH_TIME_MINUTES <= row.MinutesToPeak <= LAUNCH_TIME_MINUTES + OBSERVATION_TIME_MINUTES:
+            target_outputs_list[idx] = 0.0
+
+    return pd.DataFrame(np.array(target_outputs_list), columns=["IsStrongFlare"])
+
+
+def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8, use_science_delay=True):
 
     df_train = pd.DataFrame()
     df_test = pd.DataFrame()
@@ -114,10 +126,14 @@ def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8):
     test_x = test_x.drop(["FlareClass"], axis=1)
     test_x = test_x.drop(["MinutesToPeak"], axis=1)
 
+    if use_science_delay:
+        train_y = get_delay_informed_outputs(train_y, train_x_additional_flare_data)
+        test_y = get_delay_informed_outputs(test_y, test_x_additional_flare_data)
+
     return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
 
 
-def get_training_and_test_sets(tree_data, train_proportion=0.8):
+def get_training_and_test_sets(tree_data, train_proportion=0.8, use_science_delay=True):
 
     rows, cols = tree_data.shape
     split = int(rows * train_proportion)
@@ -139,10 +155,14 @@ def get_training_and_test_sets(tree_data, train_proportion=0.8):
     test_x = test_x.drop(["FlareClass"], axis=1)
     test_x = test_x.drop(["MinutesToPeak"], axis=1)
 
+    if use_science_delay:
+        train_y = get_delay_informed_outputs(train_y, train_x_additional_flare_data)
+        test_y = get_delay_informed_outputs(test_y, test_x_additional_flare_data)
+
     return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
 
 
-def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0, stratify=True):
+def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0, stratify=True, use_science_delay=True):
 
     # peak_threshold_minutes_-10000_threshold_M1.0_naive
     strong_flare_threshold_letter = strong_flare_threshold[0]
@@ -156,11 +176,11 @@ def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold
         tree_data = pickle.load(f)
 
     if stratify:
-        train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = get_stratified_training_and_test_sets(tree_data, train_proportion=0.8)
+        train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y = get_stratified_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
     else:
-        train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = get_training_and_test_sets(tree_data)
+        train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y = get_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
 
-    return train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y
+    return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
 
 
 def linear_interpolation(input_data, minutes_since_start):

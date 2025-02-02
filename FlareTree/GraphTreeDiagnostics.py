@@ -92,7 +92,7 @@ def graph_nan_frequency(results, peak_filtering_minutes):
     metric_values_train = defaultdict(list)
     metric_values_test = defaultdict(list)
     for timestamp in results.minutes_since_start.to_list():
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
+        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
         training_record_count = train_x.shape[0]
         test_record_count = test_x.shape[0]
         for metric in ["Temperature", "Temperature1MinuteDifference", "Temperature3MinuteDifference",
@@ -122,7 +122,7 @@ def make_confusion_matrix(results, minutes_since_start, peak_filtering_minutes):
     """Create training and test confusion matrices"""
 
     t = tc.create_tree_from_df(results, minutes_since_start)
-    train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes)
+    train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
     t.fit(train_x, train_y)
     test_predictions = t.predict(test_x)
     train_predictions = t.predict(train_x)
@@ -152,7 +152,7 @@ def graph_feature_importance(minutes_since_start, peak_filtering_minutes):
     """Create a bar chart showing tree feature importance"""
 
     t = tc.create_tree_from_df(results, minutes_since_start)
-    train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes)
+    train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
     t.fit(train_x, train_y)
     features_importances = t.feature_importances_
     f_i = []
@@ -199,6 +199,9 @@ run_nickname = "2025_01_11_C1_threshold_f1_interpolation_no_filter"
 inputs = tc.get_inputs_dict(results_folderpath, run_nickname)
 peak_filtering_minutes = inputs['peak_filtering_threshold_minutes']
 strong_flare_threshold = inputs['strong_flare_threshold']
+use_naive_diffs = inputs['use_naive_diffs']
+use_science_delay = inputs["use_science_delay"]
+stratify = inputs["stratify"]
 
 results = tc.get_results_pickle(results_folderpath, run_nickname)
 

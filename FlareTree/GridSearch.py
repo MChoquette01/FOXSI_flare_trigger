@@ -67,18 +67,6 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     # plt.show()
 
 
-def get_delay_informed_outputs(target_outputs, additional_flare_data):
-    """Set any y-variables that cannot be observed given launch delays a value of 0.0"""
-
-    target_outputs_list = [x[0] for x in target_outputs.values.tolist()]
-
-    for idx, row in additional_flare_data.iterrows():
-        if not tc.LAUNCH_TIME_MINUTES <= row.MinutesToPeak <= tc.LAUNCH_TIME_MINUTES + tc.OBSERVATION_TIME_MINUTES:
-            target_outputs_list[idx] = 0.0
-
-    return pd.DataFrame(np.array(target_outputs_list))
-
-
 def make_dir_safe(folder_path):
     """MSI sometimes fails on folder creation when GridSearch.py is being run in parallel"""
     try:
@@ -264,13 +252,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
     if stratify:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data)
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
     else:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data)
-
-    if use_science_delay:
-        train_y = get_delay_informed_outputs(train_y, train_x_additional_data)
-        test_y = get_delay_informed_outputs(test_y, test_x_additional_data)
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
 
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)

@@ -185,7 +185,7 @@ def get_flare_class():
     return flare_ids_and_mags
 
 
-def get_confidence_graph(t, train_x, test_x, test_x_flare_ids, train_y, test_y, minutes_since_start, output_dir):
+def get_confidence_graph(t, test_x, test_x_additional_flare_data, test_y, minutes_since_start):
 
     def confidence_graph_helper(plot_int, test_confidence_values, flare_class_letter):
 
@@ -201,26 +201,22 @@ def get_confidence_graph(t, train_x, test_x, test_x_flare_ids, train_y, test_y, 
         plt.title(f"{flare_class_letter} Class", fontsize=18)
         plt.legend()
 
-
-    flare_ids_and_mags = get_flare_class()
-
-    # seperate flares by class
-    classes = {"B": {'test_x': [], 'test_y': []},
-               "C": {'test_x': [], 'test_y': []},
-               "M": {'test_x': [], 'test_y': []},
-               "X": {'test_x': [], 'test_y': []}}
-    for flare_id, x_data, y_data in zip(test_x_flare_ids, test_x.iterrows(), test_y.iterrows()):
-        flare_class_letter = flare_ids_and_mags[str(int(flare_id))][0]
-        classes[flare_class_letter]['test_x'].append(x_data[1])
-        classes[flare_class_letter]['test_y'].append(y_data[1])
+    # isolate train/test data by flare magnitude (letter only)
+    test_data_by_class = {}
+    test_and_additional_x_data = pd.concat([test_x.reset_index(drop=True),
+                                            test_x_additional_flare_data.reset_index(drop=True),
+                                            test_y.reset_index(drop=True)], ignore_index=False, axis=1)
+    for flare_mag_letter in ["B", "C", "M", "X"]:
+        subset = test_and_additional_x_data[test_and_additional_x_data.FlareClass.str.startswith(flare_mag_letter)]
+        class_test_y = subset.IsStrongFlare
+        subset = subset.drop(list(test_x_additional_flare_data.columns) + ["IsStrongFlare"], axis=1)
+        test_data_by_class[flare_mag_letter] = {"test_x": subset, "test_y": class_test_y}
 
 
-    # train_confidence_values = get_path_stats(t, train_x, train_y)
-    # test_confidence_values = get_path_stats(t, test_x, test_y)
-    test_confidence_values_b = get_path_stats(t, pd.DataFrame(classes["B"]['test_x']), pd.DataFrame(classes["B"]['test_y']))
-    test_confidence_values_c = get_path_stats(t, pd.DataFrame(classes["C"]['test_x']), pd.DataFrame(classes["C"]['test_y']))
-    test_confidence_values_m = get_path_stats(t, pd.DataFrame(classes["M"]['test_x']), pd.DataFrame(classes["M"]['test_y']))
-    test_confidence_values_x = get_path_stats(t, pd.DataFrame(classes["X"]['test_x']), pd.DataFrame(classes["X"]['test_y']))
+    test_confidence_values_b = get_path_stats(t, pd.DataFrame(test_data_by_class["B"]['test_x']), pd.DataFrame(test_data_by_class["B"]['test_y']))
+    test_confidence_values_c = get_path_stats(t, pd.DataFrame(test_data_by_class["C"]['test_x']), pd.DataFrame(test_data_by_class["C"]['test_y']))
+    test_confidence_values_m = get_path_stats(t, pd.DataFrame(test_data_by_class["M"]['test_x']), pd.DataFrame(test_data_by_class["M"]['test_y']))
+    test_confidence_values_x = get_path_stats(t, pd.DataFrame(test_data_by_class["X"]['test_x']), pd.DataFrame(test_data_by_class["X"]['test_y']))
 
     plt.figure(figsize=(16, 9))
     confidence_graph_helper(221, test_confidence_values_b, "B")
@@ -238,58 +234,15 @@ def get_confidence_graph(t, train_x, test_x, test_x_flare_ids, train_y, test_y, 
     # plt.show()
 
 
-def get_science_goals_accuracy(test_x_flare_ids, test_x, test_y, minutes_since_start):
-
-    results = {"TP": {"Observed": 0, "Not observed": 0},
-               "FP": {"Observed": 0, "Not observed": 0},
-               "FN": {"Observed": 0, "Not observed": 0},
-               "TN": {"Observed": 0, "Not observed": 0}}
-    LAUNCH_DELAY_MINUTES = 7
-    OBSERVATION_TIME_MINUTES = 6
-    flare_ids = [int(x) for x in test_x_flare_ids.to_list()]
-    test_y = test_y.IsC5OrHigher.to_list()
-    test_predictions = t.predict(test_x.values)
-    # get all records from this timestamp
-    flare_minutes_to_peak = {}
-    client, flares_table = tc.connect_to_flares_db()
-    cursor = flares_table.find({"FlareID": {"$regex": f"_{minutes_since_start}$"}})
-    for record in cursor:
-        flare_minutes_to_peak[int(record["FlareID"].split("_")[0])] = record["MinutesToPeak"]
-    client.close()
-    for flare_id, gt, prediction in tqdm(zip(flare_ids, test_y, test_predictions)):
-        minutes_to_peak = flare_minutes_to_peak[flare_id]
-        if gt:
-            if prediction:
-                if LAUNCH_DELAY_MINUTES <= minutes_to_peak <= LAUNCH_DELAY_MINUTES + OBSERVATION_TIME_MINUTES:
-                    results["TP"]["Observed"] += 1
-                else:
-                    results["TP"]["Not observed"] += 1
-            else:
-                if LAUNCH_DELAY_MINUTES <= minutes_to_peak <= LAUNCH_DELAY_MINUTES + OBSERVATION_TIME_MINUTES:
-                    results["FN"]["Observed"] += 1
-                else:
-                    results["FN"]["Not observed"] += 1
-        else:
-            if prediction:
-                if LAUNCH_DELAY_MINUTES <= minutes_to_peak <= LAUNCH_DELAY_MINUTES + OBSERVATION_TIME_MINUTES:
-                    results["FP"]["Observed"] += 1
-                else:
-                    results["FP"]["Not observed"] += 1
-            else:
-                if LAUNCH_DELAY_MINUTES <= minutes_to_peak <= LAUNCH_DELAY_MINUTES + OBSERVATION_TIME_MINUTES:
-                    results["TN"]["Observed"] += 1
-                else:
-                    results["TN"]["Not observed"] += 1
-    print(results)
-
-
-results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
-run_nickname = "2025_01_11_C1_threshold_f1_interpolation_no_filter"
+results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\Results"
+run_nickname = "2025_02_02_stratify_test"
 
 inputs = tc.get_inputs_dict(results_folderpath, run_nickname)
 peak_filtering_minutes = inputs['peak_filtering_threshold_minutes']
 strong_flare_threshold = inputs['strong_flare_threshold']
 use_naive_diffs = inputs['use_naive_diffs']
+use_science_delay = inputs["use_science_delay"]
+stratify = inputs["stratify"]
 
 out_dir = os.path.join(results_folderpath, run_nickname)
 
@@ -297,8 +250,13 @@ results = tc.get_results_pickle(results_folderpath, run_nickname)
 
 for timestamp in results.minutes_since_start.tolist():
     t = tc.get_tree(out_dir, timestamp, trained=True)
-    train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), strong_flare_threshold, use_naive_diffs=use_naive_diffs, peak_filtering_minutes=0)
+    train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp),
+                                                                                                                                        strong_flare_threshold,
+                                                                                                                                        use_naive_diffs=use_naive_diffs,
+                                                                                                                                        peak_filtering_minutes=peak_filtering_minutes,
+                                                                                                                                        stratify=stratify,
+                                                                                                                                        use_science_delay=use_science_delay)
     # print_tree_structure(t, list(train_x.columns))
     # get_path(t, test_x, sample_id=234)
-    get_confidence_graph(t, train_x, test_x, test_x_flare_ids, train_y, test_y, int(timestamp), out_dir)
+    get_confidence_graph(t, test_x, test_x_additional_flare_data, test_y, int(timestamp))
     # get_science_goals_accuracy(test_x_flare_ids, test_x, test_y, int(timestamp))
