@@ -82,6 +82,41 @@ def is_flare_strong(test_flux_level, threshold_letter_level="C", threshold_numbe
         return True
 
 
+def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8):
+
+    df_train = pd.DataFrame()
+    df_test = pd.DataFrame()
+
+    # stratify
+    for flare_mag_letter in ["B", "C", "M", "X"]:
+        subset = tree_data[tree_data.FlareClass.str.startswith(flare_mag_letter)]
+        subset = subset.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
+        number_of_training_rows = int(subset.shape[0] * train_proportion)
+        df_train = pd.concat([df_train, subset.iloc[:number_of_training_rows, :]], axis=0)
+        df_test = pd.concat([df_test, subset.iloc[number_of_training_rows:, :]], axis=0)
+
+    df_train = df_train.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
+    df_test = df_test.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
+
+    train_x = df_train.iloc[:, :-1]
+    train_y = df_train.iloc[:, -1:]
+    test_x = df_test.iloc[:, :-1]
+    test_y = df_test.iloc[:, -1:]
+
+    train_x_additional_flare_data = pd.concat([train_x.FlareID, train_x.FlareClass, train_x.MinutesToPeak], axis=1)
+    train_x_additional_flare_data = train_x_additional_flare_data.reset_index()
+    train_x = train_x.drop(["FlareID"], axis=1)
+    train_x = train_x.drop(["FlareClass"], axis=1)
+    train_x = train_x.drop(["MinutesToPeak"], axis=1)
+    test_x_additional_flare_data = pd.concat([test_x.FlareID, test_x.FlareClass, test_x.MinutesToPeak], axis=1)
+    test_x_additional_flare_data = test_x_additional_flare_data.reset_index()
+    test_x = test_x.drop(["FlareID"], axis=1)
+    test_x = test_x.drop(["FlareClass"], axis=1)
+    test_x = test_x.drop(["MinutesToPeak"], axis=1)
+
+    return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
+
+
 def get_training_and_test_sets(tree_data, train_proportion=0.8):
 
     rows, cols = tree_data.shape
@@ -93,15 +128,21 @@ def get_training_and_test_sets(tree_data, train_proportion=0.8):
     test_x = test.iloc[:, :-1]
     test_y = test.iloc[:, -1:]
 
-    train_x_flare_ids = train_x.FlareID
+    train_x_additional_flare_data = pd.concat([train_x.FlareID, train_x.FlareClass, train_x.MinutesToPeak], axis=1)
+    train_x_additional_flare_data = train_x_additional_flare_data.reset_index()
     train_x = train_x.drop(["FlareID"], axis=1)
-    test_x_flare_ids = test_x.FlareID
+    train_x = train_x.drop(["FlareClass"], axis=1)
+    train_x = train_x.drop(["MinutesToPeak"], axis=1)
+    test_x_additional_flare_data = pd.concat([test_x.FlareID, test_x.FlareClass, test_x.MinutesToPeak], axis=1)
+    test_x_additional_flare_data = test_x_additional_flare_data.reset_index()
     test_x = test_x.drop(["FlareID"], axis=1)
+    test_x = test_x.drop(["FlareClass"], axis=1)
+    test_x = test_x.drop(["MinutesToPeak"], axis=1)
 
-    return train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y
+    return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
 
 
-def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0):
+def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0, stratify=True):
 
     # peak_threshold_minutes_-10000_threshold_M1.0_naive
     strong_flare_threshold_letter = strong_flare_threshold[0]
@@ -114,7 +155,11 @@ def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold
     with open(data_filepath, "rb") as f:
         tree_data = pickle.load(f)
 
-    train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = get_training_and_test_sets(tree_data)
+    if stratify:
+        train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = get_stratified_training_and_test_sets(tree_data, train_proportion=0.8)
+    else:
+        train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y = get_training_and_test_sets(tree_data)
+
     return train_x, train_x_flare_ids, train_y, test_x, test_x_flare_ids, test_y
 
 
