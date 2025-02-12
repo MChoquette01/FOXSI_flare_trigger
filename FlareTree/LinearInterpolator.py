@@ -41,6 +41,8 @@ def create_interpolated_table_for_timestamp(use_naive_diffs=False):
     # get unique flare IDs
     flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
     for flare_id in flare_ids:
+        if int(flare_id) in tc.BLACKLISTED_FLARE_IDS:
+            continue
         this_record = defaultdict(list)
         cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_'}}, {"XRSARemaining": 0,
                                                                               "XRSBRemaining": 0})

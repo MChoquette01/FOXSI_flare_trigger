@@ -224,7 +224,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         result = client['Flares']['NaiveFlares'].find(filter=filter, projection=project, sort=sort, limit=limit)
         for record in result:
             flare_id, timestamp = record["FlareID"].split("_")
-            xrsbs_during_observation.append([flare_id, timestamp, record["CurrentXRSB"]])
+            if flare_id not in tc.BLACKLISTED_FLARE_IDS:
+                xrsbs_during_observation.append([flare_id, timestamp, record["CurrentXRSB"]])
 
         xrsbs_during_observation = pd.DataFrame(np.array(xrsbs_during_observation))
         xrsbs_during_observation.columns = ["FlareID", "Timestamp", "XRSB"]
@@ -232,7 +233,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         parsed_flares = []
         all_entries = flares_table.find({'FlareID': {'$regex': f'_{time_minutes}$'}})
         for record in tqdm(all_entries, desc=f"Creating flare objects ({time_minutes} minutes since start)..."):
-            parsed_flares.append(Flare(record, use_naive_diffs, xrsbs_during_observation, multiclass))
+            if record["FlareID"] not in tc.BLACKLISTED_FLARE_IDS:
+                parsed_flares.append(Flare(record, use_naive_diffs, xrsbs_during_observation, multiclass))
 
         client.close()
 
@@ -575,13 +577,13 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 20
+        time_minutes = 10
         strong_flare_threshold = "C5.0"  # inclusive to strong flares
-        nan_removal_strategy = "mean"
+        nan_removal_strategy = "linear_interpolation"
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "realtime_test"
-        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
+        run_nickname = "realtime_test_msi_debug"
+        model_type = "Gradient Boosted Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
