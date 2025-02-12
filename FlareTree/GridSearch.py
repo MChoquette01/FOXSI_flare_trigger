@@ -59,12 +59,41 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     ax[0].set_ylabel(["True Label"], fontsize=14)
     ax[1].set_ylabel(["True Label"], fontsize=14)
     plt.rcParams.update({'font.size': 16})
-    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=[f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]).plot(ax=ax[0])
-    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=[f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]).plot(ax=ax[1])
+
+    if strong_flare_threshold is None:  # multiclass
+        display_labels = [f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"]
+    else:  # binary
+        display_labels = [f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]
+
+    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=display_labels).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=display_labels).plot(ax=ax[1])
     fig.suptitle(f"Flares {time_minutes - 15} minutes since start", fontsize=24)
     plt.tight_layout()
     fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
     # plt.show()
+
+
+def get_confusion_matrix_stats(cm):
+    tp = np.diag(cm)
+
+    results = {"Precision": [],
+               "Recall": [],
+               "F1": [],
+               "FPR": [],
+               "TSS": []}
+
+    for col_idx in range(cm.shape[0]):
+        fp = np.sum(cm[:, col_idx]) - tp[col_idx]
+        fn = np.sum(cm[col_idx, :]) - tp[col_idx]
+        tn = cm.sum() - fp - fn - tp.sum()
+        results["Precision"].append(tp[col_idx] / (tp[col_idx] + fp))
+        results["Recall"].append(tp[col_idx] / (tp[col_idx] + fn))
+        results["F1"].append((2 * results["Precision"][col_idx] * results["Recall"][col_idx]) / (
+                    results["Precision"][col_idx] + results["Recall"][col_idx]))
+        results["FPR"].append(fp / (fp + tn))
+        results["TSS"].append(results["Recall"][col_idx] - results["FPR"][col_idx])
+
+    return results
 
 
 def make_dir_safe(folder_path):
@@ -75,13 +104,33 @@ def make_dir_safe(folder_path):
     except FileExistsError:
         pass
 
+
+def get_max_flux_level_in_observation_time(multiclass, xrsbs, flare_id):
+    """0: < C5; 1: <= C5 x < M1; 2: M1 <= x < X0.0; 3: >= X0.0"""
+
+    flare_subset = xrsbs[xrsbs.FlareID == flare_id]
+    if multiclass:
+        if any(flare_subset.XRSB >= 1*10**-4):  # >= X
+            return 3
+        elif any(flare_subset.XRSB >= 1*10**-5):  # >= M
+            return 2
+        elif any(flare_subset.XRSB >= 5*10**-6):  # >= C5
+            return 1
+        return 0  # < C5
+
+    else: #  >= C5 or not only
+        if any(flare_subset.XRSB >= 5*10**-6):  # >= C5
+            return 1
+        return 0  # < C5
+
+
 class Flare:
-    def __init__(self, db_entry, use_naive_diffs, flux_threshold_letter, flux_threshold_number):
+    def __init__(self, db_entry, use_naive_diffs, xrsbs, multiclass):
         flare_id_timestamp = db_entry["FlareID"].split("_")
         self.flare_id = flare_id_timestamp[0]
         self.minutes_from_start = int(flare_id_timestamp[1])
         self.flare_class = db_entry["FlareClass"]
-        self.is_strong_flare = int(tc.is_flare_strong(self.flare_class, threshold_letter_level=flux_threshold_letter, threshold_number_level=flux_threshold_number))
+        self.is_strong_flare = get_max_flux_level_in_observation_time(multiclass, xrsbs, self.flare_id)
         self.minutes_to_peak = db_entry["MinutesToPeak"]
         self.current_xrsa = db_entry["CurrentXRSA"]
         self.current_xrsb = db_entry["CurrentXRSB"]
@@ -111,7 +160,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, use_science_delay, debug_mode, stratify=True):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, multiclass, debug_mode, stratify=True):
 
     # save for reproducibility
     inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
@@ -121,8 +170,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
               "scoring_metric": scoring_metric,
               "use_naive_diffs": use_naive_diffs,
               "output_folder": output_folder,
+              "multiclass": multiclass,
               "debug_mode": debug_mode,
-              "use_science_delay": use_science_delay,
               "run_nickname": run_nickname,
               "stratify": stratify}
 
@@ -131,7 +180,11 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     run_nickname = f'{datetime.now().strftime("%Y_%m_%d")}_{run_nickname}'
 
-    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"
+    parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_threshold_minutes}"
+    if multiclass:
+        parsed_flares_dir += "_multiclass"
+    else:
+        parsed_flares_dir += f"_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"
     if use_naive_diffs:
         parsed_flares_dir += "_naive"
 
@@ -152,14 +205,32 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     results = []  # store best params for each timestamp
     out_path = os.path.join("Parsed Flares", parsed_flares_dir, f"{time_minutes}_minutes_since_start.pkl")
     if not os.path.exists(out_path):
-
         # get flares
         client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
 
+        # get XRSB table
+        regex_string = ""
+        for timestamp in range(time_minutes + tc.LAUNCH_TIME_MINUTES, time_minutes + tc.LAUNCH_TIME_MINUTES + tc.OBSERVATION_TIME_MINUTES):
+            regex_string += f"_{timestamp}|"
+        regex_string = regex_string[:-1]
+
+        xrsbs_during_observation = []
+        filter = {'FlareID': {'$regex': regex_string}}
+        project = {'CurrentXRSB': 1, 'FlareID': 1}
+        sort = list({}.items())
+        limit = 0
+        result = client['Flares']['NaiveFlares'].find(filter=filter, projection=project, sort=sort, limit=limit)
+        for record in result:
+            flare_id, timestamp = record["FlareID"].split("_")
+            xrsbs_during_observation.append([flare_id, timestamp, record["CurrentXRSB"]])
+
+        xrsbs_during_observation = pd.DataFrame(np.array(xrsbs_during_observation))
+        xrsbs_during_observation.columns = ["FlareID", "Timestamp", "XRSB"]
+
         parsed_flares = []
-        all_entries = flares_table.find({})
-        for record in all_entries:
-            parsed_flares.append(Flare(record, use_naive_diffs, strong_flare_threshold_letter, strong_flare_threshold_number))
+        all_entries = flares_table.find({'FlareID': {'$regex': f'_{time_minutes}$'}})
+        for record in tqdm(all_entries, desc=f"Creating flare objects ({time_minutes} minutes since start)..."):
+            parsed_flares.append(Flare(record, use_naive_diffs, xrsbs_during_observation, multiclass))
 
         client.close()
 
@@ -252,9 +323,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
     if stratify:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data)
     else:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data, use_science_delay=use_science_delay)
+        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data)
 
     if nan_removal_strategy != "linear_interpolation":
         train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
@@ -288,12 +359,29 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         tn, fp, fn, tp = cm.ravel()
         return fp / (tn + fp)
 
+    def precision_scorer(y_true, y_predicted):
+        return precision_score(y_true, y_predicted, average='macro', zero_division=0.0)
+
+    def f1_scorer(y_true, y_predicted):
+        return f1_score(y_true, y_predicted, average='macro', zero_division=0.0)
+
+    def balanced_accuracy_scorer(y_true, y_predicted):
+        return balanced_accuracy_score(y_true, y_predicted)
 
     fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
+    p_scorer = make_scorer(precision_scorer, greater_is_better=True)
+    f1_scorer = make_scorer(f1_scorer, greater_is_better=True)
+    balanced_accuracy_scorer = make_scorer(balanced_accuracy_scorer, greater_is_better=True)
     if scoring_metric == "false_positive_rate":
         scoring_metric = fpr_scorer
+    elif scoring_metric == "precision":
+        scoring_metric = p_scorer
+    elif scoring_metric == "f1":
+        scoring_metric = f1_scorer
+    elif scoring_metric == "balanced_accuracy":
+        scoring_metric = balanced_accuracy_scorer
 
-    gs = GridSearchCV(t, params, scoring=scoring_metric)
+    gs = GridSearchCV(t, params, scoring=scoring_metric, n_jobs=2)
     gs.fit(train_x.values, train_y.values)
     best_params = gs.best_params_
     # print(best_params)
@@ -321,28 +409,14 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
     # plt.show()
     test_cm = confusion_matrix(test_y, test_predictions)
-    test_tn, test_fp, test_fn, test_tp = test_cm.ravel()
-
-    test_tpr = test_tp/(test_tp+test_fn)
-    test_fpr = test_fp/(test_tp+test_fp)
-    test_tss = test_tpr - test_fpr
-    test_precision = precision_score(test_y, test_predictions)
-    test_recall = recall_score(test_y, test_predictions)
-    test_f1 = f1_score(test_y, test_predictions)
+    test_scores = get_confusion_matrix_stats(test_cm)
 
     train_predictions = t.predict(train_x.values)
     train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
     train_cm = confusion_matrix(train_y, train_predictions)
-    train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
+    train_scores = get_confusion_matrix_stats(train_cm)
 
-    train_tpr = train_tp/(train_tp+train_fn)
-    train_fpr = train_fp/(train_tp+train_fp)
-    train_tss = train_tpr - train_fpr
-    train_precision = precision_score(train_y, train_predictions)
-    train_recall = recall_score(train_y, train_predictions)
-    train_f1 = f1_score(train_y, train_predictions)
-
-    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold)
+    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
     graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname)
 
     results.append([time_minutes,
@@ -356,22 +430,22 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                     int(best_params["min_samples_split"]),
                     best_params["min_weight_fraction_leaf"],
                     best_params["class_weight"],
-                    test_precision,
-                    train_precision,
-                    test_recall,
-                    train_recall,
-                    test_f1,
-                    train_f1,
-                    test_tpr,
-                    train_tpr,
-                    test_fpr,
-                    train_fpr,
-                    test_tss,
-                    train_tss])
+                    sum(test_scores["Precision"]) / 4,
+                    sum(train_scores["Precision"]) / 4,
+                    sum(test_scores["Recall"]) / 4,
+                    sum(train_scores["Recall"]) / 4,
+                    sum(test_scores["F1"]) / 4,
+                    sum(train_scores["F1"]) / 4,
+                    sum(test_scores["Recall"]) / 4,  # Labelled as TPR
+                    sum(train_scores["Recall"]) / 4,  # Labelled as TPR
+                    sum(test_scores["FPR"]) / 4,
+                    sum(train_scores["FPR"]) / 4,
+                    sum(test_scores["TSS"]) / 4,
+                    sum(train_scores["TSS"]) / 4,])
 
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
-    plot_tree(t, feature_names=train_x.columns, class_names=[f"<{strong_flare_threshold}", f">={strong_flare_threshold}"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
+    plot_tree(t, feature_names=train_x.columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
     graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
 
@@ -401,11 +475,11 @@ if __name__ == "__main__":
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-o", type=str, help="Output folder. A 'Results' folder will be created inside")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
+        parser.add_argument('--multiclass', action='store_true', help="Enables 4 class output instead of 2")
+        parser.add_argument('--no-multiclass', dest='multiclass', action='store_false')
+        parser.set_defaults(debug=True)
         parser.add_argument('--debug', action='store_true', help="Use to test a quick grid to get results quicker")
         parser.add_argument('--no-debug', dest='debug', action='store_false')
-        parser.set_defaults(debug=False)
-        parser.add_argument('--scienceDelay', action='store_true', help="Only receords that can be observed given science delays are treated as positive")
-        parser.add_argument('--no-scienceDelay', dest='scienceDelay', action='store_false')
         parser.set_defaults(debug=False)
         parser.add_argument('--naive', action='store_true', help="Use to parse flares with naive temp/EM differences")
         parser.add_argument('--no-naive', dest='naive', action='store_false')
@@ -418,7 +492,7 @@ if __name__ == "__main__":
                     scoring_metric=args.m,
                     output_folder=args.o,
                     run_nickname=args.n,
-                    use_science_delay=args.scienceDelay,
+                    multiclass=args.multiclass,
                     use_naive_diffs=args.naive,
                     debug_mode=args.debug)
 
@@ -430,8 +504,8 @@ if __name__ == "__main__":
         nan_removal_strategy = "mean"
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "stratify_test"
-        use_science_delay = True
+        run_nickname = "realtime_test"
+        multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
         grid_search(peak_filtering_threshold_minutes,
@@ -442,5 +516,5 @@ if __name__ == "__main__":
                     use_naive_diffs,
                     output_folder,
                     run_nickname,
-                    use_science_delay,
+                    multiclass,
                     use_debug_mode)
