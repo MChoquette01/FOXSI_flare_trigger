@@ -1,5 +1,6 @@
 from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.metrics import  confusion_matrix, precision_score, recall_score, f1_score, balanced_accuracy_score, make_scorer, ConfusionMatrixDisplay
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, balanced_accuracy_score, make_scorer, ConfusionMatrixDisplay
 from sklearn.model_selection import GridSearchCV
 from datetime import datetime
 import pandas as pd
@@ -160,7 +161,7 @@ class Flare:
         self.xrsb_remaining = db_entry["XRSBRemaining"]
 
 
-def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, multiclass, debug_mode, stratify=True):
+def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, model_type, multiclass, debug_mode, stratify=True):
 
     # save for reproducibility
     inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
@@ -172,6 +173,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
               "output_folder": output_folder,
               "multiclass": multiclass,
               "debug_mode": debug_mode,
+              "model_type": model_type,
               "run_nickname": run_nickname,
               "stratify": stratify}
 
@@ -332,26 +334,74 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     train_x.columns = list(tree_data.columns)[2:-2]
 
-    t = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
+    if model_type == "Tree":
+        model = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
+        if debug_mode:
+            # Test parameters, should run in a few minutes for ~30 trees
+            params = {"criterion": ["gini", "entropy"],
+                      "max_depth": [x for x in range(12, 15)],
+                      "min_samples_split": [x for x in range(4, 5)],
+                      "min_samples_leaf": [x for x in range(1, 2)],
+                      "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                      "max_features": [x for x in range(5, 17)],
+                      "class_weight": ["balanced"]}
+        else:
+            # Real deal parameters
+            params = {"criterion": ['gini', 'entropy'],
+                      "max_depth": [x for x in range(10, 21)],
+                      "min_samples_split": [x * 5 for x in range(1, 11)],
+                      "min_samples_leaf": [x * 5 for x in range(1, 11)],
+                      "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                      "max_features": [x for x in range(5, 23)],
+                      "class_weight": ["balanced"]}
 
-    if debug_mode:
-        # Test parameters, should run in a few minutes for ~30 trees
-        params = {"criterion": ["gini", "entropy"],
-                  "max_depth": [x for x in range(12, 15)],
-                  "min_samples_split": [x for x in range(4, 5)],
-                  "min_samples_leaf": [x for x in range(1, 2)],
-                  "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                  "max_features": [x for x in range(5, 17)],
-                  "class_weight": ["balanced"]}
-    else:
-        # Real deal parameters
-        params = {"criterion": ['gini', 'entropy'],
-                  "max_depth": [x for x in range(10, 21)],
-                  "min_samples_split": [x * 5 for x in range(1, 11)],
-                  "min_samples_leaf": [x * 5 for x in range(1, 11)],
-                  "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                  "max_features": [x for x in range(5, 23)],
-                  "class_weight": ["balanced"]}
+    elif model_type == "Random Forest":
+        model = RandomForestClassifier(random_state=tc.RANDOM_STATE)
+        if debug_mode:
+            params = {"n_estimators": [100],
+                      "criterion": ["gini"],
+                      "max_depth": [x for x in range(13, 15)],
+                      "min_samples_split": [x for x in range(4, 5)],
+                      "min_samples_leaf": [x for x in range(1, 2)],
+                      "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                      "max_features": [x for x in range(15, 17)],
+                      "class_weight": ["balanced"]}
+        else:
+            # Real deal parameters
+            params = {"n_estimators": [50 * x for x in range(2, 7)],
+                      "criterion": ["gini", "entropy"],
+                      "max_depth": [x for x in range(12, 15)],
+                      "min_samples_split": [x for x in range(10, 20)],
+                      "min_samples_leaf": [x for x in range(10, 20)],
+                      "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                      "max_features": [x for x in range(5, 23)],
+                      "class_weight": ["balanced"]}
+
+    elif model_type == "Gradient Boosted Tree":
+        model = GradientBoostingClassifier(random_state=tc.RANDOM_STATE)
+        if debug_mode:
+            # Test parameters, should run in a few minutes for ~30 trees
+            params = {"loss": ["log_loss"],
+                      "learning_rate": [0.1],
+                      "n_estimators": [100, 150],
+                      "criterion": ["friedman_mse"],
+                      "max_depth": [15],
+                      "min_samples_split": [5],
+                      "min_samples_leaf": [10],
+                      "min_weight_fraction_leaf": [0.1],
+                      "max_features": [15]
+                      }
+        else:
+            # Real deal parameters
+            params = {"loss": ["log_loss"],
+                      "learning_rate": [0.05, 0.1, 0.15],
+                      "n_estimators": [50 * x for x in range(2, 7)],
+                      "criterion": ["friedman_mse"],
+                      "max_depth": [x for x in range(12, 15)],
+                      "min_samples_split": [x for x in range(10, 20)],
+                      "min_samples_leaf": [x for x in range(10, 20)],
+                      "min_weight_fraction_leaf": [x / 10 for x in range(2)],
+                      "max_features": [x for x in range(5, 23)]}
 
     # fun with custom scoring functions!
     def false_positive_scorer(y_true, y_predicted):
@@ -381,28 +431,51 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     elif scoring_metric == "balanced_accuracy":
         scoring_metric = balanced_accuracy_scorer
 
-    gs = GridSearchCV(t, params, scoring=scoring_metric, n_jobs=2)
-    gs.fit(train_x.values, train_y.values)
+    gs = GridSearchCV(model, params, scoring=scoring_metric, n_jobs=3)
+    gs.fit(train_x.values, train_y.values.ravel())
     best_params = gs.best_params_
     # print(best_params)
     # print(gs.best_score_)
     # initialize the best tree
-    t = DecisionTreeClassifier(criterion=best_params["criterion"],
-                               max_depth=best_params["max_depth"],
-                               max_features=best_params["max_features"],
-                               min_samples_leaf=best_params["min_samples_leaf"],
-                               min_samples_split=best_params["min_samples_split"],
-                               min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
-                               class_weight=best_params["class_weight"],
-                               random_state=tc.RANDOM_STATE)
+    if model_type == "Tree":
+        final_model = DecisionTreeClassifier(criterion=best_params["criterion"],
+                                             max_depth=best_params["max_depth"],
+                                             max_features=best_params["max_features"],
+                                             min_samples_leaf=best_params["min_samples_leaf"],
+                                             min_samples_split=best_params["min_samples_split"],
+                                             min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
+                                             class_weight=best_params["class_weight"],
+                                             random_state=tc.RANDOM_STATE)
+    elif model_type == "Random Forest":
+        final_model = RandomForestClassifier(n_estimators=best_params["n_estimators"],
+                                             criterion=best_params["criterion"],
+                                             max_depth=best_params["max_depth"],
+                                             max_features=best_params["max_features"],
+                                             min_samples_leaf=best_params["min_samples_leaf"],
+                                             min_samples_split=best_params["min_samples_split"],
+                                             min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
+                                             class_weight=best_params["class_weight"],
+                                             random_state=tc.RANDOM_STATE)
+
+    elif model_type == "Gradient Boosted Tree":
+        final_model = GradientBoostingClassifier(loss=best_params["loss"],
+                                                 learning_rate=best_params["learning_rate"],
+                                                 n_estimators=best_params["n_estimators"],
+                                                 criterion=best_params["criterion"],
+                                                 max_depth=best_params["max_depth"],
+                                                 max_features=best_params["max_features"],
+                                                 min_samples_leaf=best_params["min_samples_leaf"],
+                                                 min_samples_split=best_params["min_samples_split"],
+                                                 min_weight_fraction_leaf=best_params["min_weight_fraction_leaf"],
+                                                 random_state=tc.RANDOM_STATE)
 
     tree_path = os.path.join(output_folder, "Results", run_nickname, "Trees", f"untrained_{time_minutes - 15}_minutes_since_start")
     with open(tree_path, 'wb') as f:
-        pickle.dump(t, f)
-    t.fit(train_x.values, train_y.values)
+        pickle.dump(final_model, f)
+    final_model.fit(train_x.values, train_y.values.ravel())
     with open(tree_path.replace('untrained', 'trained'), 'wb') as f:
-        pickle.dump(t, f)
-    test_predictions = t.predict(test_x.values)
+        pickle.dump(final_model, f)
+    test_predictions = final_model.predict(test_x.values)
 
     # create confusion matrices (or rather, the related stats) for training and test sets
     test_y_reshaped = test_y.to_numpy().reshape((np.shape(test_y)[0],))
@@ -411,13 +484,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     test_cm = confusion_matrix(test_y, test_predictions)
     test_scores = get_confusion_matrix_stats(test_cm)
 
-    train_predictions = t.predict(train_x.values)
+    train_predictions = final_model.predict(train_x.values)
     train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
     train_cm = confusion_matrix(train_y, train_predictions)
     train_scores = get_confusion_matrix_stats(train_cm)
 
     graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
-    graph_feature_importance(output_folder, t, time_minutes, train_x, run_nickname)
+    graph_feature_importance(output_folder, final_model, time_minutes, train_x, run_nickname)
 
     results.append([time_minutes,
                     tree_data.shape[0],
@@ -429,7 +502,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                     int(best_params["min_samples_leaf"]),
                     int(best_params["min_samples_split"]),
                     best_params["min_weight_fraction_leaf"],
-                    best_params["class_weight"],
+                    best_params["class_weight"] if "class_weight" in list(best_params.keys()) else None,
                     sum(test_scores["Precision"]) / 4,
                     sum(train_scores["Precision"]) / 4,
                     sum(test_scores["Recall"]) / 4,
@@ -445,7 +518,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
-    plot_tree(t, feature_names=train_x.columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
+    if model_type == "Tree":
+        plot_tree(final_model, feature_names=train_x.columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
     graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
 
@@ -474,6 +548,7 @@ if __name__ == "__main__":
         parser.add_argument("-i", type=str, help="Method to replace NaN values. Either a Pandas interpolate() strategy or 'linear_interpolation'")
         parser.add_argument("-m", type=str, help="Sklearn scoring metric to use or 'false_positive_rate'")
         parser.add_argument("-o", type=str, help="Output folder. A 'Results' folder will be created inside")
+        parser.add_argument("-p", type=str, help="Model type to use - 'Tree', 'Random Forest' or 'Gradient Boosted Tree'")
         parser.add_argument("-n", type=str, help="Run nickname - make sure it's unique!")
         parser.add_argument('--multiclass', action='store_true', help="Enables 4 class output instead of 2")
         parser.add_argument('--no-multiclass', dest='multiclass', action='store_false')
@@ -493,6 +568,7 @@ if __name__ == "__main__":
                     output_folder=args.o,
                     run_nickname=args.n,
                     multiclass=args.multiclass,
+                    model_type=args.p,
                     use_naive_diffs=args.naive,
                     debug_mode=args.debug)
 
@@ -505,6 +581,7 @@ if __name__ == "__main__":
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
         run_nickname = "realtime_test"
+        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
@@ -516,5 +593,6 @@ if __name__ == "__main__":
                     use_naive_diffs,
                     output_folder,
                     run_nickname,
+                    model_type,
                     multiclass,
                     use_debug_mode)
