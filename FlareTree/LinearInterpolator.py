@@ -27,7 +27,8 @@ def do_interpolate(to_interpolate, flare_ids, variable_name):
     x = x.interpolate(method='linear', limit_direction='both')
     # remove blacklisted flare IDs from column labels
     for bad_flare_id in tc.BLACKLISTED_FLARE_IDS:
-        flare_ids.remove(str(bad_flare_id))
+        if str(bad_flare_id) in flare_ids:  # only need to do this once
+            flare_ids.remove(str(bad_flare_id))
     x.columns = flare_ids
 
     if not os.path.exists("Interpolations"):
