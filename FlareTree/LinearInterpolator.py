@@ -25,9 +25,9 @@ def do_interpolate(to_interpolate, flare_ids, variable_name):
     x = pad_list(to_interpolate)
     x = pd.DataFrame(np.array(x), dtype=np.float64).T
     x = x.interpolate(method='linear', limit_direction='both')
-    # removed blacklisted flare IDs from column labels
+    # remove blacklisted flare IDs from column labels
     for bad_flare_id in tc.BLACKLISTED_FLARE_IDS:
-        flare_ids.remove(int(bad_flare_id))
+        flare_ids.remove(str(bad_flare_id))
     x.columns = flare_ids
 
     if not os.path.exists("Interpolations"):
