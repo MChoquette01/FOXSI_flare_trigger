@@ -150,7 +150,6 @@ def get_training_and_test_sets(tree_data, train_proportion=0.8):
 
 def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0, stratify=True):
 
-    # peak_threshold_minutes_-10000_threshold_M1.0_naive
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"

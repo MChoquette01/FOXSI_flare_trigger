@@ -49,20 +49,20 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
 
     plt.clf()
     fig, ax = plt.subplots(1, 2)
-    fig.set_figwidth(16)
-    fig.set_figheight(9)
-    ax[0].set_title("Training", fontsize=14)
-    ax[1].set_title("Test", fontsize=14)
-    ax[0].tick_params(axis='both', which='major', labelsize=12)
-    ax[1].tick_params(axis='both', which='major', labelsize=12)
-    ax[0].set_xlabel(["Predicted Label"], fontsize=14)
-    ax[1].set_xlabel(["Predicted Label"], fontsize=14)
-    ax[0].set_ylabel(["True Label"], fontsize=14)
-    ax[1].set_ylabel(["True Label"], fontsize=14)
-    plt.rcParams.update({'font.size': 16})
+    fig.set_figwidth(25)
+    fig.set_figheight(14)
+    ax[0].set_title("Training", fontsize=24)
+    ax[1].set_title("Test", fontsize=24)
+    ax[0].tick_params(axis='both', which='major', labelsize=22)
+    ax[1].tick_params(axis='both', which='major', labelsize=22)
+    ax[0].set_xlabel(["Predicted Label"], fontsize=24)
+    ax[1].set_xlabel(["Predicted Label"], fontsize=24)
+    ax[0].set_ylabel(["True Label"], fontsize=24)
+    ax[1].set_ylabel(["True Label"], fontsize=24)
+    plt.rcParams.update({'font.size': 26})
 
     if strong_flare_threshold is None:  # multiclass
-        display_labels = [f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"]
+        display_labels = [f"< C5", f">= C5", f"M", f"X"]
     else:  # binary
         display_labels = [f"< {strong_flare_threshold}", f">= {strong_flare_threshold}"]
 
@@ -224,7 +224,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         result = client['Flares']['NaiveFlares'].find(filter=filter, projection=project, sort=sort, limit=limit)
         for record in result:
             flare_id, timestamp = record["FlareID"].split("_")
-            if flare_id not in tc.BLACKLISTED_FLARE_IDS:
+            if int(flare_id) not in tc.BLACKLISTED_FLARE_IDS:
                 xrsbs_during_observation.append([flare_id, timestamp, record["CurrentXRSB"]])
 
         xrsbs_during_observation = pd.DataFrame(np.array(xrsbs_during_observation))
@@ -233,7 +233,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         parsed_flares = []
         all_entries = flares_table.find({'FlareID': {'$regex': f'_{time_minutes}$'}})
         for record in tqdm(all_entries, desc=f"Creating flare objects ({time_minutes} minutes since start)..."):
-            if record["FlareID"] not in tc.BLACKLISTED_FLARE_IDS:
+            if int(record["FlareID"].split("_")[0]) not in tc.BLACKLISTED_FLARE_IDS:
                 parsed_flares.append(Flare(record, use_naive_diffs, xrsbs_during_observation, multiclass))
 
         client.close()
@@ -582,8 +582,8 @@ if __name__ == "__main__":
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "realtime_test_msi_debug"
-        model_type = "Gradient Boosted Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
+        run_nickname = "newcm_test"
+        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
