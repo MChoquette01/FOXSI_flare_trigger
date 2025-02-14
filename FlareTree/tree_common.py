@@ -12,6 +12,11 @@ import pickle
 RANDOM_STATE = 102024
 LAUNCH_TIME_MINUTES = 8
 OBSERVATION_TIME_MINUTES = 6
+# These have all None/null/NaN values in at least one column
+# TODO: Find these dynamically
+BLACKLISTED_FLARE_IDS = [201905071840, 202209291309, 202305150933, 202308242037, 202310150231, 202310150611, 202310151622, 202310151935,
+                         202310211202, 202310211807, 202310260137, 202310260433, 202310260609, 202310261213, 202310261317, 202310261624,
+                         202310261831, 202310261918, 202310261949, 202310262153, 202310262247]
 
 
 def connect_to_flares_db(use_naive=False):
@@ -145,7 +150,6 @@ def get_training_and_test_sets(tree_data, train_proportion=0.8):
 
 def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold, use_naive_diffs=True, peak_filtering_minutes=0, stratify=True):
 
-    # peak_threshold_minutes_-10000_threshold_M1.0_naive
     strong_flare_threshold_letter = strong_flare_threshold[0]
     strong_flare_threshold_number = strong_flare_threshold[1:]
     parsed_flares_dir = f"peak_threshold_minutes_{peak_filtering_minutes}_threshold_{strong_flare_threshold_letter}{strong_flare_threshold_number}"

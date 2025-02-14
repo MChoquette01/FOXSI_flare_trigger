@@ -25,6 +25,10 @@ def do_interpolate(to_interpolate, flare_ids, variable_name):
     x = pad_list(to_interpolate)
     x = pd.DataFrame(np.array(x), dtype=np.float64).T
     x = x.interpolate(method='linear', limit_direction='both')
+    # remove blacklisted flare IDs from column labels
+    for bad_flare_id in tc.BLACKLISTED_FLARE_IDS:
+        if str(bad_flare_id) in flare_ids:  # only need to do this once
+            flare_ids.remove(str(bad_flare_id))
     x.columns = flare_ids
 
     if not os.path.exists("Interpolations"):
@@ -41,6 +45,8 @@ def create_interpolated_table_for_timestamp(use_naive_diffs=False):
     # get unique flare IDs
     flare_ids = [x["FlareID"].split("_")[0] for x in flares_table.find({'FlareID': {'$regex': '_0$'}})]
     for flare_id in flare_ids:
+        if int(flare_id) in tc.BLACKLISTED_FLARE_IDS:
+            continue
         this_record = defaultdict(list)
         cursor = flares_table.find({'FlareID': {'$regex': f'^{flare_id}_'}}, {"XRSARemaining": 0,
                                                                               "XRSBRemaining": 0})
