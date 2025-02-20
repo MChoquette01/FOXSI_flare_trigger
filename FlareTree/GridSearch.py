@@ -87,7 +87,7 @@ def get_confusion_matrix_stats(cm):
         fp = np.sum(cm[:, col_idx]) - tp[col_idx]
         fn = np.sum(cm[col_idx, :]) - tp[col_idx]
         tn = cm.sum() - fp - fn - tp.sum()
-        results["Precision"].append(tp[col_idx] / (tp[col_idx] + fp)) if (tp[col_idx] + fp) != 0 else 0
+        results["Precision"].append(tp[col_idx] / (tp[col_idx] + fp) if (tp[col_idx] + fp) != 0 else 0)
         results["Recall"].append(tp[col_idx] / (tp[col_idx] + fn))
         results["F1"].append((2 * results["Precision"][col_idx] * results["Recall"][col_idx]) / (
                     results["Precision"][col_idx] + results["Recall"][col_idx]))
@@ -467,6 +467,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     def precision_scorer(y_true, y_predicted):
         return precision_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
+    def adjusted_precision_scorer(y_true, y_predicted):
+        cm = confusion_matrix(y_true, y_predicted)
+        tp = cm[1:4, 1:4].sum()
+        fp = sum(cm[0, 1:4])
+        return tp / (tp + fp)
+
     def f1_scorer(y_true, y_predicted):
         return f1_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
@@ -475,12 +481,15 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
     p_scorer = make_scorer(precision_scorer, greater_is_better=True)
+    adjusted_p_scorer = make_scorer(adjusted_precision_scorer, greater_is_better=True)
     f1_scorer = make_scorer(f1_scorer, greater_is_better=True)
     balanced_accuracy_scorer = make_scorer(balanced_accuracy_scorer, greater_is_better=True)
     if scoring_metric == "false_positive_rate":
         scoring_metric = fpr_scorer
     elif scoring_metric == "precision":
         scoring_metric = p_scorer
+    elif scoring_metric == "adjusted_precision":
+        scoring_metric = adjusted_p_scorer
     elif scoring_metric == "f1":
         scoring_metric = f1_scorer
     elif scoring_metric == "balanced_accuracy":
@@ -636,10 +645,10 @@ if __name__ == "__main__":
         time_minutes = 10
         strong_flare_threshold = "C5.0"  # inclusive to strong flares
         nan_removal_strategy = "linear_interpolation"
-        scoring_metric = "precision"
+        scoring_metric = "adjusted_precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "savescorestest"
-        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
+        run_nickname = "adjustedprecisiontest"
+        model_type = "Random Forest"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
