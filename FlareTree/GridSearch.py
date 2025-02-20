@@ -87,7 +87,7 @@ def get_confusion_matrix_stats(cm):
         fp = np.sum(cm[:, col_idx]) - tp[col_idx]
         fn = np.sum(cm[col_idx, :]) - tp[col_idx]
         tn = cm.sum() - fp - fn - tp.sum()
-        results["Precision"].append(tp[col_idx] / (tp[col_idx] + fp))
+        results["Precision"].append(tp[col_idx] / (tp[col_idx] + fp)) if (tp[col_idx] + fp) != 0 else 0
         results["Recall"].append(tp[col_idx] / (tp[col_idx] + fn))
         results["F1"].append((2 * results["Precision"][col_idx] * results["Recall"][col_idx]) / (
                     results["Precision"][col_idx] + results["Recall"][col_idx]))
@@ -95,6 +95,58 @@ def get_confusion_matrix_stats(cm):
         results["TSS"].append(results["Recall"][col_idx] - results["FPR"][col_idx])
 
     return results
+
+
+def get_additional_scores(y_true, y_pred, test_x_additional_data, label, run_nickname):
+
+    # assemble scores DF
+    scores_df = []
+    for idx, row in test_x_additional_data.iterrows():
+        scores_df.append([row.FlareID, row.FlareClass, tc.flare_c5_or_higher(row.FlareClass), y_true.IsStrongFlare.iloc[idx], y_pred[idx]])
+    scores_df = pd.DataFrame(np.array(scores_df))
+    scores_df.columns = ["FlareID", "FlareClass", "IsFlareClass>=C5", "GT", "Prediction"]
+    scores_df.to_csv(
+        os.path.join(output_folder, "Results", run_nickname, "Scores", f"{time_minutes- 15}_minutes_since_start_{label}_set.csv"),
+        index=False)
+    with open(os.path.join(output_folder, "Results", run_nickname, "Scores", f"{time_minutes - 15}_minutes_since_start_{label}_set.pkl"), "wb") as f:
+        pickle.dump(scores_df, f)
+
+    tp, tn, fp, fn = 0, 0, 0, 0
+    for row_idx in range(0, 4):
+        for col_idx in range(0, 4):
+            subset = scores_df[(scores_df.GT == str(float(row_idx))) & (scores_df.Prediction == str(float(col_idx)))]
+            if row_idx == 0:
+                if col_idx == 0:
+                    tn += subset.shape[0]
+                else:
+                    fp += subset.shape[0]
+            else:
+                if col_idx == 0:
+                    fn += subset.shape[0]
+                else:
+                    tp += subset.shape[0]
+
+    precision_micro = precision_score(y_true, y_pred, labels=[0, 1, 2, 3], average="micro", zero_division=np.nan)
+    precision_macro = precision_score(y_true, y_pred, labels=[0, 1, 2, 3], average="macro", zero_division=np.nan)
+    precision_adjusted = tp / (tp + fp)
+    recall_micro = recall_score(y_true, y_pred, labels=[0, 1, 2, 3], average="micro", zero_division=np.nan)
+    recall_macro = recall_score(y_true, y_pred, labels=[0, 1, 2, 3], average="macro", zero_division=np.nan)
+    recall_adjusted = tp / (tp + fn)
+    f1_micro = f1_score(y_true, y_pred, labels=[0, 1, 2, 3], average="micro", zero_division=np.nan)
+    f1_macro = f1_score(y_true, y_pred, labels=[0, 1, 2, 3], average="macro", zero_division=np.nan)
+    f1_special = (2 * precision_adjusted * recall_adjusted) / (precision_adjusted + recall_adjusted)
+
+    scores = pd.DataFrame(np.array([precision_micro, precision_macro, precision_adjusted,
+                                    recall_micro, recall_macro, recall_adjusted,
+                                    f1_micro, f1_macro, f1_special])).T
+
+    scores.columns = ["PrecisionMicro", "PrecisionMacro", "PrecisionAdjusted",
+                      "RecallMicro", "RecallMacro", "RecallAdjusted",
+                      "F1Micro", "F1Macro", "F1Adjusted"]
+
+    scores.to_csv(os.path.join(output_folder, "Results", run_nickname, "Scores", f"{time_minutes - 15}_minutes_since_start_{label}_scores.csv"), index=False)
+    with open(os.path.join(output_folder, "Results", run_nickname, "Scores", f"{time_minutes - 15}_minutes_since_start_{label}_scores.pkl"), "wb") as f:
+        pickle.dump(scores, f)
 
 
 def make_dir_safe(folder_path):
@@ -195,6 +247,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     make_dir_safe(os.path.join(output_folder, "Parsed Flares", parsed_flares_dir))
     make_dir_safe(os.path.join(output_folder, "Results"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Scores"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Trees"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Feature Importance"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices"))
@@ -412,10 +465,10 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         return fp / (tn + fp)
 
     def precision_scorer(y_true, y_predicted):
-        return precision_score(y_true, y_predicted, average='macro', zero_division=0.0)
+        return precision_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
     def f1_scorer(y_true, y_predicted):
-        return f1_score(y_true, y_predicted, average='macro', zero_division=0.0)
+        return f1_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
     def balanced_accuracy_scorer(y_true, y_predicted):
         return balanced_accuracy_score(y_true, y_predicted)
@@ -480,16 +533,17 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     test_predictions = final_model.predict(test_x.values)
 
     # create confusion matrices (or rather, the related stats) for training and test sets
-    test_y_reshaped = test_y.to_numpy().reshape((np.shape(test_y)[0],))
     # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
     # plt.show()
     test_cm = confusion_matrix(test_y, test_predictions)
     test_scores = get_confusion_matrix_stats(test_cm)
 
     train_predictions = final_model.predict(train_x.values)
-    train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
     train_cm = confusion_matrix(train_y, train_predictions)
     train_scores = get_confusion_matrix_stats(train_cm)
+
+    get_additional_scores(test_y, test_predictions, test_x_additional_data, "test", run_nickname)
+    get_additional_scores(train_y, train_predictions, train_x_additional_data, "training", run_nickname)
 
     graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
     graph_feature_importance(output_folder, final_model, time_minutes, train_x, run_nickname)
@@ -516,7 +570,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                     sum(test_scores["FPR"]) / 4,
                     sum(train_scores["FPR"]) / 4,
                     sum(test_scores["TSS"]) / 4,
-                    sum(train_scores["TSS"]) / 4,])
+                    sum(train_scores["TSS"]) / 4])
 
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
@@ -531,6 +585,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                        "min_weight_fraction_leaf", "class_weight", "test_precision", "train_precision", "test_recall",
                        "train_recall", "test_f1", "train_f1", "test_tpr", "train_tpr", "test_fpr", "train_fpr", "test_tss",
                        "train_tss"]
+
+    results.to_csv(os.path.join(output_folder, "Results", run_nickname, "Scores", f"results_{time_minutes}_minutes_since_start.csv"), index=False)
 
     with open(os.path.join(output_folder, "Results", run_nickname, "Optimal Tree Hyperparameters", f"results_{time_minutes}.pkl"), "wb") as f:
         pickle.dump(results, f)
@@ -582,7 +638,7 @@ if __name__ == "__main__":
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "newcm_test"
+        run_nickname = "savescorestest"
         model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
