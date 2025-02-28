@@ -13,11 +13,6 @@ import pickle
 RANDOM_STATE = 102024
 LAUNCH_TIME_MINUTES = 8
 OBSERVATION_TIME_MINUTES = 6
-# These have all None/null/NaN values in at least one column
-# TODO: Find these dynamically
-BLACKLISTED_FLARE_IDS = [201905071840, 202209291309, 202305150933, 202308242037, 202310150231, 202310150611, 202310151622, 202310151935,
-                         202310211202, 202310211807, 202310260137, 202310260433, 202310260609, 202310261213, 202310261317, 202310261624,
-                         202310261831, 202310261918, 202310261949, 202310262153, 202310262247]
 
 
 def connect_to_flares_db(use_naive=False):
@@ -168,7 +163,6 @@ def get_train_and_test_data_from_pkl(minutes_since_start, strong_flare_threshold
 
     return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
 
-
 def linear_interpolation(input_data, minutes_since_start):
     """Linearly interpolates missing data in <input_data>. Uses lookup tables created by imputer.py"""
 
@@ -176,7 +170,7 @@ def linear_interpolation(input_data, minutes_since_start):
         if column_name != "FlareID" and column_name != "IsStrongFlare":
             col = input_data[column_name]
             if col.isna().sum() != 0:
-                lookup_table_path = os.path.join("Interpolations", f"{column_name}.pkl")
+                lookup_table_path = os.path.join("Interpolations", f"{minutes_since_start - 15}_minutes_since_start", f"{column_name}.pkl")
                 with open(lookup_table_path, "rb") as f:
                     lookup_table = pickle.load(f)
                 for nan_idx in col[col.isnull()].index.to_list():
