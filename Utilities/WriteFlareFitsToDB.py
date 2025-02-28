@@ -12,6 +12,8 @@ import re
 Requires download of MongoDB (https://www.mongodb.com/try/download/community) and Mongo DB Compass (part of the default install)."""
 
 
+# flare_filepath = r"C:\Users\matth\Documents\Capstone\data\GOES_XRS_historical.fits"
+# xray_filepath = r"C:\Users\matth\Documents\Capstone\data\sci_xrsf-l2-avg1m_g16_s20170207_e20240906_v2-2-0.nc"
 flare_filepath = r"/users/0/choqu012/raw_data/GOES_XRS_historical.fits"
 xray_filepath = r"/users/0/choqu012/raw_data/sci_xrsf-l2-avg1m_g16_s20170207_e20240906_v2-2-0.nc"
 # flare_filepath = '../../GOES_XRS_historical.fits'
@@ -140,7 +142,9 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
         xrsb_remaining_data = [float(x) for x in values]
         # calculate difference in quantities over the last 1,3,5 datapoints...
         xrsa_1_minute_diff, xrsb_1_minute_diff = calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, 1)
+        xrsa_2_minute_diff, xrsb_2_minute_diff = calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, 2)
         xrsa_3_minute_diff, xrsb_3_minute_diff = calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, 3)
+        xrsa_4_minute_diff, xrsb_4_minute_diff = calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, 4)
         xrsa_5_minute_diff, xrsb_5_minute_diff = calculate_differences(flare_data, xray_times, xray_xrsa_fluxes, xray_xrsb_fluxes, idx, 5)
 
         #add in the temperature and emission measure features:
@@ -153,9 +157,17 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
         else:
             em_1_minute_diff, temp_1_minute_diff = [None], [None]
         if xrsa_datum is not None and xrsb_datum is not None:
+            em_2_minute_diff, temp_2_minute_diff = emt.compute_goes_emission_measure(xrsa_2_minute_diff, xrsb_2_minute_diff, 16)
+        else:
+            em_2_minute_diff, temp_2_minute_diff = [None], [None]
+        if xrsa_datum is not None and xrsb_datum is not None:
             em_3_minute_diff, temp_3_minute_diff = emt.compute_goes_emission_measure(xrsa_3_minute_diff, xrsb_3_minute_diff, 16)
         else:
             em_3_minute_diff, temp_3_minute_diff = [None], [None]
+        if xrsa_datum is not None and xrsb_datum is not None:
+            em_4_minute_diff, temp_4_minute_diff = emt.compute_goes_emission_measure(xrsa_4_minute_diff, xrsb_4_minute_diff, 16)
+        else:
+            em_4_minute_diff, temp_4_minute_diff = [None], [None]
         if xrsa_datum is not None and xrsb_datum is not None:
             em_5_minute_diff, temp_5_minute_diff = emt.compute_goes_emission_measure(xrsa_5_minute_diff, xrsb_5_minute_diff, 16)
         else:
@@ -164,16 +176,24 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
         if em_1_minute_diff is not None:
             em_1_minute_diff = em_1_minute_diff[0]
             temp_1_minute_diff = temp_1_minute_diff[0]
+        if em_2_minute_diff is not None:
+            em_2_minute_diff = em_2_minute_diff[0]
+            temp_2_minute_diff = temp_2_minute_diff[0]
         if em_3_minute_diff is not None:
             em_3_minute_diff = em_3_minute_diff[0]
             temp_3_minute_diff = temp_3_minute_diff[0]
+        if em_4_minute_diff is not None:
+            em_4_minute_diff = em_4_minute_diff[0]
+            temp_4_minute_diff = temp_4_minute_diff[0]
         if em_5_minute_diff is not None:
             em_5_minute_diff = em_5_minute_diff[0]
             temp_5_minute_diff = temp_5_minute_diff[0]
 
         # naive differences
         naive_em_one_minute_diff, naive_temp_one_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=1)
+        naive_em_two_minute_diff, naive_temp_two_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=2)
         naive_em_three_minute_diff, naive_temp_three_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=3)
+        naive_em_four_minute_diff, naive_temp_four_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=4)
         naive_em_five_minute_diff, naive_temp_five_minute_diff = calculate_naive_diff(flare_data, idx, minutes_difference=5)
 
         flares_table.insert_one({"_id": f"{flare_id}_{idx}",
@@ -182,25 +202,38 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
                                  "MinutesToPeak": minutes_to_peak,
                                  "CurrentXRSA": float(xrsa_datum) if xrsa_datum is not None else None,
                                  "CurrentXRSB": float(xrsb_datum) if xrsb_datum is not None else None,
+                                 "XRSBBackgroundFluxDifference": float(xrsb_datum) - float(flare_data["background flux"]) if xrsb_datum is not None else None,
                                  "XRSA1MinuteDifference": xrsa_1_minute_diff,
                                  "XRSB1MinuteDifference": xrsb_1_minute_diff,
+                                 "XRSA2MinuteDifference": xrsa_2_minute_diff,
+                                 "XRSB2MinuteDifference": xrsb_2_minute_diff,
                                  "XRSA3MinuteDifference": xrsa_3_minute_diff,
                                  "XRSB3MinuteDifference": xrsb_3_minute_diff,
+                                 "XRSA4MinuteDifference": xrsa_4_minute_diff,
+                                 "XRSB4MinuteDifference": xrsb_4_minute_diff,
                                  "XRSA5MinuteDifference": xrsa_5_minute_diff,
                                  "XRSB5MinuteDifference": xrsb_5_minute_diff,
                                  "Temperature": temperature[0],
                                  "EmissionMeasure": emission_measure[0],
                                  "Temperature1MinuteDifference": temp_1_minute_diff,
                                  "EmissionMeasure1MinuteDifference": em_1_minute_diff,
+                                 "Temperature2MinuteDifference": temp_2_minute_diff,
+                                 "EmissionMeasure2MinuteDifference": em_2_minute_diff,
                                  "Temperature3MinuteDifference": temp_3_minute_diff,
                                  "EmissionMeasure3MinuteDifference": em_3_minute_diff,
+                                 "Temperature4MinuteDifference": temp_4_minute_diff,
+                                 "EmissionMeasure4MinuteDifference": em_4_minute_diff,
                                  "Temperature5MinuteDifference": temp_5_minute_diff,
                                  "EmissionMeasure5MinuteDifference": em_5_minute_diff,
                                  "NaiveTemperature1MinuteDifference": naive_temp_one_minute_diff,
+                                 "NaiveTemperature2MinuteDifference": naive_temp_two_minute_diff,
                                  "NaiveTemperature3MinuteDifference": naive_temp_three_minute_diff,
+                                 "NaiveTemperature4MinuteDifference": naive_temp_four_minute_diff,
                                  "NaiveTemperature5MinuteDifference": naive_temp_five_minute_diff,
                                  "NaiveEmissionMeasure1MinuteDifference": naive_em_one_minute_diff,
+                                 "NaiveEmissionMeasure2MinuteDifference": naive_em_two_minute_diff,
                                  "NaiveEmissionMeasure3MinuteDifference": naive_em_three_minute_diff,
+                                 "NaiveEmissionMeasure4MinuteDifference": naive_em_four_minute_diff,
                                  "NaiveEmissionMeasure5MinuteDifference": naive_em_five_minute_diff,
                                  "XRSARemaining": xrsa_remaining_data,
                                  "XRSBRemaining": xrsb_remaining_data})
