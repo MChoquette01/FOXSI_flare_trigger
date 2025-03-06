@@ -92,14 +92,14 @@ def graph_nan_frequency(results, peak_filtering_minutes):
     metric_values_train = defaultdict(list)
     metric_values_test = defaultdict(list)
     for timestamp in results.minutes_since_start.to_list():
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
-        training_record_count = train_x.shape[0]
-        test_record_count = test_x.shape[0]
+        split_datasets = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
+        training_record_count = split_datasets["train"]["x"].shape[0]
+        test_record_count = split_datasets["test"]["x"].shape[0]
         for metric in ["Temperature", "Temperature1MinuteDifference", "Temperature3MinuteDifference",
                        "Temperature5MinuteDifference", "EmissionMeasure", "EmissionMeasure1MinuteDifference",
                        "EmissionMeasure3MinuteDifference", "EmissionMeasure5MinuteDifference", "CurrentXRSA", "CurrentXRSB"]:
-            metric_values_train[metric].append(train_x[metric].isna().sum() / training_record_count)
-            metric_values_test[metric].append(test_x[metric].isna().sum() / test_record_count)
+            metric_values_train[metric].append(split_datasets["train"]["x"][metric].isna().sum() / training_record_count)
+            metric_values_test[metric].append(split_datasets["test"]["x"][metric].isna().sum() / test_record_count)
     # plot
     xs = [int(x) for x in results.minutes_since_start.to_list()]
     for metric, values in metric_values_train.items():
@@ -122,10 +122,10 @@ def make_confusion_matrix(results, minutes_since_start, peak_filtering_minutes):
     """Create training and test confusion matrices"""
 
     t = tc.create_tree_from_df(results, minutes_since_start)
-    train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
-    t.fit(train_x, train_y)
-    test_predictions = t.predict(test_x)
-    train_predictions = t.predict(train_x)
+    split_datasets = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
+    t.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
+    test_predictions = t.predict(split_datasets["test"]["x"])
+    train_predictions = t.predict(split_datasets["train"]["x"])
 
     plt.clf()
     fig, ax = plt.subplots(1, 2)
@@ -140,8 +140,8 @@ def make_confusion_matrix(results, minutes_since_start, peak_filtering_minutes):
     ax[0].set_ylabel(["True Label"], fontsize=14)
     ax[1].set_ylabel(["True Label"], fontsize=14)
     plt.rcParams.update({'font.size': 16})
-    ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
-    ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
+    ConfusionMatrixDisplay.from_predictions(split_datasets["train"]["y"], train_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[0])
+    ConfusionMatrixDisplay.from_predictions(split_datasets["test"]["y"], test_predictions, display_labels=["< C5", ">= C5"]).plot(ax=ax[1])
     fig.suptitle(f"Flares {minutes_since_start - 15} minutes since start", fontsize=24)
     plt.tight_layout()
     fig.savefig(os.path.join(out_dir, f"ConfusionMatrices_{minutes_since_start}_minutes_since_start.png"))
@@ -152,16 +152,16 @@ def graph_feature_importance(minutes_since_start, peak_filtering_minutes):
     """Create a bar chart showing tree feature importance"""
 
     t = tc.create_tree_from_df(results, minutes_since_start)
-    train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
-    t.fit(train_x, train_y)
+    split_datasets = tc.get_train_and_test_data_from_pkl(minutes_since_start, peak_filtering_minutes=peak_filtering_minutes, stratify=stratify, use_science_delay=use_science_delay)
+    t.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
     features_importances = t.feature_importances_
     f_i = []
     nans = []
     for idx, feature_importance in enumerate(features_importances):
         if not math.isnan(feature_importance):
-            f_i.append([train_x.columns[idx], feature_importance])
+            f_i.append([split_datasets["train"]["x"].columns[idx], feature_importance])
         else:
-            nans.append([train_x.columns[idx], 0.1])
+            nans.append([split_datasets["train"]["x"].columns[idx], 0.1])
     f_i = sorted(f_i, key=lambda x: x[1])
     plt.figure(figsize=(16, 9))
     plt.barh([x for x in range(len(f_i))], [x[1] for x in f_i])
@@ -195,7 +195,7 @@ def graph_flare_count(results, strong_flare_threshold):
 
 
 results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
-run_nickname = "2025_01_11_C1_threshold_f1_interpolation_no_filter"
+run_nickname = "2025_02_16_multiclass_precision_interpolation_no_filter_science_delay_stratified_rf"
 inputs = tc.get_inputs_dict(results_folderpath, run_nickname)
 peak_filtering_minutes = inputs['peak_filtering_threshold_minutes']
 strong_flare_threshold = inputs['strong_flare_threshold']
