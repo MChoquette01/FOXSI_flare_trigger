@@ -177,7 +177,7 @@ def get_confusion_matrix_stats(cm):
     return results
 
 
-def get_additional_scores(y_true, y_pred, test_x_additional_data, label, run_nickname):
+def get_additional_scores(y_true, y_pred, test_x_additional_data, label, run_nickname, output_folder):
 
     # assemble scores DF
     scores_df = []
@@ -692,9 +692,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     temporal_test_cm = confusion_matrix(split_datasets["temporal_test"]["y"], temporal_test_predictions)
     temporal_test_scores = get_confusion_matrix_stats(temporal_test_cm)
 
-    get_additional_scores(split_datasets["test"]["y"], test_predictions, split_datasets["test"]["additional_data"], "test", run_nickname)
-    get_additional_scores(split_datasets["train"]["y"], train_predictions, split_datasets["train"]["additional_data"], "training", run_nickname)
-    get_additional_scores(split_datasets["temporal_test"]["y"], temporal_test_predictions, split_datasets["temporal_test"]["additional_data"], "temporal_test", run_nickname)
+    get_additional_scores(split_datasets["test"]["y"], test_predictions, split_datasets["test"]["additional_data"], "test", run_nickname, output_folder)
+    get_additional_scores(split_datasets["train"]["y"], train_predictions, split_datasets["train"]["additional_data"], "training", run_nickname, output_folder)
+    get_additional_scores(split_datasets["temporal_test"]["y"], temporal_test_predictions, split_datasets["temporal_test"]["additional_data"], "temporal_test", run_nickname, output_folder)
 
     graph_confusion_matrices(output_folder, split_datasets["train"]["y"], train_predictions, split_datasets["test"]["y"], test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
     graph_feature_importance(output_folder, final_model, time_minutes, split_datasets["train"]["x"], run_nickname)
