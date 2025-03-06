@@ -83,9 +83,9 @@ while True:
         with open(results_filepath, "rb") as f:
             results = pickle.load(f)
         t = tc.get_tree(results_folderpath, minutes_since_flare_start=10, trained=True)
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(minutes_since_start=10, strong_flare_threshold="C5.0", use_naive_diffs=True,
+        split_datasets = tc.get_train_and_test_data_from_pkl(minutes_since_start=10, strong_flare_threshold="C5.0", use_naive_diffs=True,
                                          peak_filtering_minutes=0)
-        scores = get_metrics(t, train_x, train_y, test_x, test_y)
+        scores = get_metrics(t, split_datasets["train"]["x"], split_datasets["train"]["y"], split_datasets["test"]["x"], split_datasets["test"]["y"])
         training_metrics_str = f"Precision: {round(scores['Training']['Precision'], 3)}, " \
                                f"Recall: {round(scores['Training']['Recall'], 3)}," \
                                f"FPR: {round(scores['Training']['FPR'], 3)}," \
@@ -119,14 +119,14 @@ while True:
         window["Scoring Metric Text"].update(inputs["scoring_metric"])
         window["NaN Removal Method Text"].update(inputs["nan_removal_strategy"])
 
-        train_predictions = t.predict(train_x)
-        train_cm = confusion_matrix(train_y, train_predictions)
+        train_predictions = t.predict(split_datasets["train"]["x"])
+        train_cm = confusion_matrix(split_datasets["train"]["y"], train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
         train_cm_str = f"TN: {train_tn}   FP: {train_fp}\nFN: {train_fn}   TP: {train_tp}"
         window["Training CM Text"].update(value=train_cm_str)
 
-        test_predictions = t.predict(test_x)
-        test_cm = confusion_matrix(test_y, test_predictions)
+        test_predictions = t.predict(split_datasets["test"]["x"])
+        test_cm = confusion_matrix(split_datasets["test"]["y"], test_predictions)
         test_tn, test_fp, test_fn, test_tp = test_cm.ravel()
         test_cm_str = f"TN: {test_tn}   FP: {test_fp}\nFN: {test_fn}   TP: {test_tp}"
         window["Test CM Text"].update(value=test_cm_str)
@@ -158,14 +158,14 @@ while True:
         if inputs["nan_removal_strategy"] == "linear_interpolation":
             tree_data = tc.linear_interpolation(tree_data, int(values['Minutes From Start Slider'] + 15))
 
-        train_x, _, train_y, test_x, _, test_y = tc.get_training_and_test_sets(tree_data)
+        split_datasets = tc.get_stratified_training_and_test_sets(tree_data)
 
         if inputs["nan_removal_strategy"] != "linear_interpolation":
-            train_x, test_x = tc.impute_variable_data(train_x, test_x, inputs["nan_removal_strategy"])
+            split_datasets["train"]["x"], split_datasets["test"]["x"] = tc.impute_variable_data(split_datasets["train"]["x"], split_datasets["test"]["x"], inputs["nan_removal_strategy"])
 
-        train_x.columns = list(tree_data.columns)[1:-1]
+        split_datasets["train"]["x"].columns = list(tree_data.columns)[1:-1]
 
-        scores = get_metrics(t, train_x, train_y, test_x, test_y)
+        scores = get_metrics(t, split_datasets["train"]["x"], split_datasets["train"]["y"], split_datasets["test"]["x"], split_datasets["test"]["y"])
         training_metrics_str = f"Precision: {round(scores['Training']['Precision'], 3)}, " \
                                f"Recall: {round(scores['Training']['Recall'], 3)}," \
                                f"FPR: {round(scores['Training']['FPR'], 3)}," \
@@ -180,14 +180,14 @@ while True:
         window["Training Text"].update(value=training_metrics_str)
         window["Test Text"].update(value=test_metrics_str)
 
-        train_predictions = t.predict(train_x)
-        train_cm = confusion_matrix(train_y, train_predictions)
+        train_predictions = t.predict(split_datasets["train"]["x"])
+        train_cm = confusion_matrix(split_datasets["train"]["y"], train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
         train_cm_str = f"TN: {train_tn}   FP: {train_fp}\nFN: {train_fn}   TP: {train_tp}"
         window["Training CM Text"].update(value=train_cm_str)
 
-        test_predictions = t.predict(test_x)
-        test_cm = confusion_matrix(test_y, test_predictions)
+        test_predictions = t.predict(split_datasets["test"]["x"])
+        test_cm = confusion_matrix(split_datasets["test"]["y"], test_predictions)
         test_tn, test_fp, test_fn, test_tp = test_cm.ravel()
         test_cm_str = f"TN: {test_tn}   FP: {test_fp}\nFN: {test_fn}   TP: {test_tp}"
         window["Test CM Text"].update(value=test_cm_str)

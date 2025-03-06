@@ -56,10 +56,6 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     ax[1].set_title("Test", fontsize=24)
     ax[0].tick_params(axis='both', which='major', labelsize=22)
     ax[1].tick_params(axis='both', which='major', labelsize=22)
-    ax[0].set_xlabel(["Predicted Label"], fontsize=24)
-    ax[1].set_xlabel(["Predicted Label"], fontsize=24)
-    ax[0].set_ylabel(["True Label"], fontsize=24)
-    ax[1].set_ylabel(["True Label"], fontsize=24)
     plt.rcParams.update({'font.size': 26})
 
     if strong_flare_threshold is None:  # multiclass
@@ -69,10 +65,67 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
 
     ConfusionMatrixDisplay.from_predictions(train_y, train_predictions, display_labels=display_labels).plot(ax=ax[0])
     ConfusionMatrixDisplay.from_predictions(test_y, test_predictions, display_labels=display_labels).plot(ax=ax[1])
-    fig.suptitle(f"Flares {time_minutes - 15} minutes since start", fontsize=24)
+
+    ax[0].set_xlabel("Prediction", fontsize=24)
+    ax[1].set_xlabel("Prediction", fontsize=24)
+    ax[0].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
+    ax[1].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
+
+    fig.suptitle(f"{time_minutes - 15} Minutes Since Flare Start", fontsize=30)
     plt.tight_layout()
-    fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"ConfusionMatrices_{time_minutes}_minutes_since_start.png"))
+    fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start.png"))
     # plt.show()
+
+
+def plot_stratified_confusion_matricies(final_model, training_data, test_data, run_nickname):
+
+    for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
+        if not "C" in flare_class:
+            test_relevant_indicies = test_data["additional_data"].index[test_data["additional_data"].FlareClass.str.startswith(flare_class)].tolist()
+            train_relevant_indicies = training_data["additional_data"].index[training_data["additional_data"].FlareClass.str.startswith(flare_class)].tolist()
+        else:
+            if flare_class == "<C5":
+                test_relevant_indicies = test_data["additional_data"].index[(test_data["additional_data"].FlareClass.str.startswith("C")) & (test_data["additional_data"]["IsFlareClass>=C5"] == False)].tolist()
+                train_relevant_indicies = training_data["additional_data"].index[(training_data["additional_data"].FlareClass.str.startswith("C")) & (training_data["additional_data"]["IsFlareClass>=C5"] == False)].tolist()
+            elif flare_class == ">=C5":
+                test_relevant_indicies = test_data["additional_data"].index[(test_data["additional_data"].FlareClass.str.startswith("C")) & (test_data["additional_data"]["IsFlareClass>=C5"] == True)].tolist()
+                train_relevant_indicies = training_data["additional_data"].index[(training_data["additional_data"].FlareClass.str.startswith("C")) & (training_data["additional_data"]["IsFlareClass>=C5"] == True)].tolist()
+
+        test_subset_x = test_data["x"].iloc[test_relevant_indicies]
+        test_subset_y = test_data["y"].iloc[test_relevant_indicies]
+        train_subset_x = training_data["x"].iloc[train_relevant_indicies]
+        train_subset_y = training_data["y"].iloc[train_relevant_indicies]
+        test_subset_predictions = final_model.predict(test_subset_x.values)
+        train_subset_predictions = final_model.predict(train_subset_x.values)
+
+        train_display_labels = [f"< C5", f">= C5", f"M", f"X"][:len(list(set(train_subset_y.IsStrongFlare.tolist() + train_subset_predictions.tolist())))]
+        test_display_labels = [f"< C5", f">= C5", f"M", f"X"][:len(list(set(test_subset_y.IsStrongFlare.tolist() + test_subset_predictions.tolist())))]
+        # plt.clf()
+        fig, ax = plt.subplots(1, 2)
+        fig.set_figwidth(25)
+        fig.set_figheight(14)
+        ax[0].set_title("Training", fontsize=24)
+        ax[1].set_title("Test", fontsize=24)
+        ax[0].tick_params(axis='both', which='major', labelsize=22)
+        ax[1].tick_params(axis='both', which='major', labelsize=22)
+        plt.rcParams.update({'font.size': 26})
+
+        ConfusionMatrixDisplay.from_predictions(train_subset_y, train_subset_predictions, display_labels=train_display_labels).plot(ax=ax[0])
+        ConfusionMatrixDisplay.from_predictions(test_subset_y, test_subset_predictions, display_labels=test_display_labels).plot(ax=ax[1])
+
+        ax[0].set_xlabel("Prediction", fontsize=24)
+        ax[1].set_xlabel("Prediction", fontsize=24)
+        ax[0].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
+        ax[1].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
+
+        fig.suptitle(f"True Flare Class: {flare_class}", fontsize=30)
+        plt.tight_layout()
+        if "<" in flare_class:
+            flare_class = flare_class.replace("<", "Less Than")
+        elif ">=" in flare_class:
+            flare_class = flare_class.replace(">=", "Greater Than")
+        fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"True Class {flare_class} Confusion Matrix_{time_minutes} Minutes Since Start.png"))
+        # plt.show()
 
 
 def get_confusion_matrix_stats(cm):
@@ -128,6 +181,8 @@ def get_additional_scores(y_true, y_pred, test_x_additional_data, label, run_nic
                     tp += subset.shape[0]
 
     report = classification_report(y_true, y_pred, labels=[0, 1, 2, 3], digits=2, output_dict=True, zero_division='warn')
+    if "accuracy" not in list(report.keys()):  # can happen if no flare in GT class, usually for temporal_test set
+        report["accuracy"] = "N/A"
     # format nice for CSV output
     row_names = ["<C5", ">=C5", "M", "X", "Adjusted", "Micro", "Macro", "Weighted", "Total"]
     output = []
@@ -266,6 +321,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     make_dir_safe(os.path.join(output_folder, "Parsed Flares", parsed_flares_dir))
     make_dir_safe(os.path.join(output_folder, "Results"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname))
+    make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Datasets"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Scores"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Trees"))
     make_dir_safe(os.path.join(output_folder, "Results", run_nickname, "Feature Importance"))
@@ -281,6 +337,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if not os.path.exists(out_path):
         # get flares
         client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
+
+        # get temporal_test set that won't be touched in testing or trained
+        tc.get_temporal_test_set_flare_ids(client, parsed_flares_dir, time_minutes)
 
         # remove blacklisted flare IDs
         blacklisted_flares_filepath = rf"Interpolations/BlacklistedFlares/{time_minutes - 15}_minutes_since_start.pkl"
@@ -427,15 +486,18 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     if nan_removal_strategy == "linear_interpolation":
         tree_data = tc.linear_interpolation(tree_data, time_minutes)
 
-    if stratify:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_stratified_training_and_test_sets(tree_data)
-    else:
-        train_x, train_x_additional_data, train_y, test_x, test_x_additional_data, test_y = tc.get_training_and_test_sets(tree_data)
+    temporal_test_set = tc.get_temporal_test_set(tree_data, time_minutes, parsed_flares_dir)
+    split_datasets = tc.get_stratified_training_and_test_sets(tree_data)
+    split_datasets["temporal_test"] = temporal_test_set
+
+    with open(os.path.join(output_folder, "Results", run_nickname, "Datasets", f"split_datasets{time_minutes - 15}_minutes_since_start.pkl"), 'wb') as f:
+        pickle.dump(split_datasets, f)
 
     if nan_removal_strategy != "linear_interpolation":
-        train_x, test_x = tc.impute_variable_data(train_x, test_x, nan_removal_strategy)
+        split_datasets["train"]["x"], split_datasets["test"]["x"] = tc.impute_variable_data(split_datasets["train"]["x"], split_datasets["test"]["x"], nan_removal_strategy)
 
-    train_x.columns = list(tree_data.columns)[2:-2]
+
+    split_datasets["train"]["x"].columns = list(tree_data.columns)[2:-2]
 
     if model_type == "Tree":
         model = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
@@ -544,7 +606,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         scoring_metric = balanced_accuracy_scorer
 
     gs = GridSearchCV(model, params, scoring=scoring_metric, n_jobs=3)
-    gs.fit(train_x.values, train_y.values.ravel())
+    gs.fit(split_datasets["train"]["x"].values, split_datasets["train"]["y"].values.ravel())
     best_params = gs.best_params_
     # print(best_params)
     # print(gs.best_score_)
@@ -584,26 +646,34 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     tree_path = os.path.join(output_folder, "Results", run_nickname, "Trees", f"untrained_{time_minutes - 15}_minutes_since_start")
     with open(tree_path, 'wb') as f:
         pickle.dump(final_model, f)
-    final_model.fit(train_x.values, train_y.values.ravel())
+    final_model.fit(split_datasets["train"]["x"].values, split_datasets["train"]["y"].values.ravel())
     with open(tree_path.replace('untrained', 'trained'), 'wb') as f:
         pickle.dump(final_model, f)
-    test_predictions = final_model.predict(test_x.values)
+    test_predictions = final_model.predict(split_datasets["test"]["x"].values)
 
     # create confusion matrices (or rather, the related stats) for training and test sets
     # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
     # plt.show()
-    test_cm = confusion_matrix(test_y, test_predictions)
+
+    plot_stratified_confusion_matricies(final_model, split_datasets["train"], split_datasets["test"], run_nickname)
+
+    test_cm = confusion_matrix(split_datasets["test"]["y"], test_predictions)
     test_scores = get_confusion_matrix_stats(test_cm)
 
-    train_predictions = final_model.predict(train_x.values)
-    train_cm = confusion_matrix(train_y, train_predictions)
+    train_predictions = final_model.predict(split_datasets["train"]["x"].values)
+    train_cm = confusion_matrix(split_datasets["train"]["y"], train_predictions)
     train_scores = get_confusion_matrix_stats(train_cm)
 
-    get_additional_scores(test_y, test_predictions, test_x_additional_data, "test", run_nickname)
-    get_additional_scores(train_y, train_predictions, train_x_additional_data, "training", run_nickname)
+    temporal_test_predictions = final_model.predict(split_datasets["temporal_test"]["x"].values)
+    temporal_test_cm = confusion_matrix(split_datasets["temporal_test"]["y"], temporal_test_predictions)
+    temporal_test_scores = get_confusion_matrix_stats(temporal_test_cm)
 
-    graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
-    graph_feature_importance(output_folder, final_model, time_minutes, train_x, run_nickname)
+    get_additional_scores(split_datasets["test"]["y"], test_predictions, split_datasets["test"]["additional_data"], "test", run_nickname)
+    get_additional_scores(split_datasets["train"]["y"], train_predictions, split_datasets["train"]["additional_data"], "training", run_nickname)
+    get_additional_scores(split_datasets["temporal_test"]["y"], temporal_test_predictions, split_datasets["temporal_test"]["additional_data"], "temporal_test", run_nickname)
+
+    graph_confusion_matrices(output_folder, split_datasets["train"]["y"], train_predictions, split_datasets["test"]["y"], test_predictions, run_nickname, time_minutes, strong_flare_threshold=strong_flare_threshold if multiclass is False else None)
+    graph_feature_importance(output_folder, final_model, time_minutes, split_datasets["train"]["x"], run_nickname)
 
     results.append([time_minutes,
                     tree_data.shape[0],
@@ -632,7 +702,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     # plot best tree structure
     plt.figure(figsize=(50, 28))  # big, so rectangles don't overlap
     if model_type == "Tree":
-        plot_tree(final_model, feature_names=train_x.columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
+        plot_tree(final_model, feature_names=split_datasets["train"]["x"].columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
     graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
 
@@ -690,13 +760,13 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 21
+        time_minutes = 10
         strong_flare_threshold = "C5.0"  # inclusive to strong flares
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "adjusted_precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "scoringtest"
-        model_type = "Gradient Boosted Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
+        run_nickname = "savedatatest"
+        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True

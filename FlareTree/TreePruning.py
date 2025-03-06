@@ -60,40 +60,40 @@ def prune_ccp_alphas(peak_filtering_minutes):
     # ccp pruning
     for timestamp in results.minutes_since_start.tolist():
         # get data
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
-        train_x, test_x = tc.impute_variable_data(train_x, test_x)
+        split_datasets = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
+        split_datasets["train"]["x"], split_datasets["test"]["x"] = tc.impute_variable_data(split_datasets["train"]["x"], split_datasets["test"]["x"])
 
         # get baseline
         t = tc.create_tree_from_df(results, int(timestamp))
-        t.fit(train_x, train_y)
-        train_predictions = t.predict(train_x.values)
-        train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
-        train_cm = confusion_matrix(train_y, train_predictions)
+        t.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
+        train_predictions = t.predict(split_datasets["train"]["x"].values)
+        train_y_reshaped = split_datasets["train"]["y"].to_numpy().reshape((np.shape(split_datasets["train"]["y"])[0],))
+        train_cm = confusion_matrix(split_datasets["train"]["y"], train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
-        train_f1 = f1_score(train_y, train_predictions)
-        make_confusion_matrix(out_dir, t, train_x, train_y, test_x, test_y, int(timestamp))
+        train_f1 = f1_score(split_datasets["train"]["y"], train_predictions)
+        make_confusion_matrix(out_dir, t, split_datasets["train"]["x"], split_datasets["train"]["y"], split_datasets["test"]["x"], split_datasets["test"]["y"], int(timestamp))
 
         best_f1 = train_f1
         best_alpha = None
 
-        path = t.cost_complexity_pruning_path(train_x, train_y)
+        path = t.cost_complexity_pruning_path(split_datasets["train"]["x"], split_datasets["train"]["y"])
         ccp_alphas, impurities = path.ccp_alphas, path.impurities
         for alpha in ccp_alphas:
             if alpha < 0:
                 continue
             t_pruned = tc.create_tree_from_df(results, int(timestamp), ccp_alpha=alpha)
-            t_pruned.fit(train_x, train_y)
-            pruned_test_predictions = t_pruned.predict(test_x.values)
-            pruned_train_predictions = t_pruned.predict(train_x.values)
-            pruned_test_cm = confusion_matrix(test_y, pruned_test_predictions)
+            t_pruned.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
+            pruned_test_predictions = t_pruned.predict(split_datasets["test"]["x"].values)
+            pruned_train_predictions = t_pruned.predict(split_datasets["train"]["x"].values)
+            pruned_test_cm = confusion_matrix(split_datasets["test"]["y"], pruned_test_predictions)
             pruned_test_tn, pruned_test_fp, pruned_test_fn, pruned_test_tp = pruned_test_cm.ravel()
-            pruned_train_f1 = balanced_accuracy_score(train_y, pruned_train_predictions)
+            pruned_train_f1 = balanced_accuracy_score(split_datasets["train"]["y"], pruned_train_predictions)
             if pruned_test_tn != 0 and pruned_test_fp != 0 and pruned_test_fn != 0 and pruned_test_tp != 0:
                 if pruned_train_f1 > best_f1:
                     best_f1 = pruned_train_f1
                     best_alpha = alpha
         print(f"Timestamp: {timestamp}: Best alpha: {best_alpha} with an F1 of {best_f1}, an increase of {best_f1 - train_f1}")
-        make_confusion_matrix(out_dir, t_pruned, train_x, train_y, test_x, test_y, int(timestamp), ccp_alpha=best_alpha)
+        make_confusion_matrix(out_dir, t_pruned, split_datasets["train"]["x"], split_datasets["train"]["y"], split_datasets["test"]["x"], split_datasets["test"]["y"], int(timestamp), ccp_alpha=best_alpha)
 
 
 def prune_max_depth(peak_filtering_minutes):
@@ -104,18 +104,18 @@ def prune_max_depth(peak_filtering_minutes):
 
     for timestamp in results.minutes_since_start.tolist():
         # get data
-        train_x, _, train_y, test_x, _, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
-        train_x, test_x = tc.impute_variable_data(train_x, test_x)
+        split_datasets = tc.get_train_and_test_data_from_pkl(int(timestamp), peak_filtering_minutes=peak_filtering_minutes)
+        split_datasets["train"]["x"], split_datasets["test"]["x"] = tc.impute_variable_data(split_datasets["train"]["x"], split_datasets["test"]["x"])
 
         # get baseline
         t = tc.create_tree_from_df(results, int(timestamp))
-        t.fit(train_x, train_y)
+        t.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
         tree_depth = t.tree_.max_depth
-        train_predictions = t.predict(train_x.values)
-        train_y_reshaped = train_y.to_numpy().reshape((np.shape(train_y)[0],))
-        train_cm = confusion_matrix(train_y, train_predictions)
+        train_predictions = t.predict(split_datasets["train"]["x"].values)
+        train_y_reshaped = split_datasets["train"]["y"].to_numpy().reshape((np.shape(split_datasets["train"]["y"])[0],))
+        train_cm = confusion_matrix(split_datasets["train"]["y"], train_predictions)
         train_tn, train_fp, train_fn, train_tp = train_cm.ravel()
-        train_f1 = f1_score(train_y, train_predictions)
+        train_f1 = f1_score(split_datasets["train"]["y"], train_predictions)
         # make_confusion_matrix(t, train_x, train_y, test_x, test_y, int(timestamp))
 
         best_f1 = train_f1
@@ -125,18 +125,18 @@ def prune_max_depth(peak_filtering_minutes):
         for layer in fewer_layers:
             max_depth_for_timestamp = results[results.minutes_since_start == timestamp].max_depth
             t_pruned = tc.create_tree_from_df(results, int(timestamp), max_depth_override=int(max_depth_for_timestamp.iloc[0]) - layer)
-            t_pruned.fit(train_x, train_y)
-            pruned_test_predictions = t_pruned.predict(test_x.values)
-            pruned_train_predictions = t_pruned.predict(train_x.values)
-            pruned_test_cm = confusion_matrix(test_y, pruned_test_predictions)
+            t_pruned.fit(split_datasets["train"]["x"], split_datasets["train"]["y"])
+            pruned_test_predictions = t_pruned.predict(split_datasets["test"]["x"].values)
+            pruned_train_predictions = t_pruned.predict(split_datasets["train"]["x"].values)
+            pruned_test_cm = confusion_matrix(split_datasets["test"]["y"], pruned_test_predictions)
             pruned_test_tn, pruned_test_fp, pruned_test_fn, pruned_test_tp = pruned_test_cm.ravel()
-            pruned_train_f1 = balanced_accuracy_score(train_y, pruned_train_predictions)
+            pruned_train_f1 = balanced_accuracy_score(split_datasets["train"]["y"], pruned_train_predictions)
             if pruned_test_tn != 0 and pruned_test_fp != 0 and pruned_test_fn != 0 and pruned_test_tp != 0:
                 if pruned_train_f1 > best_f1:
                     best_f1 = pruned_train_f1
                     best_max_depth = int(results.max_depth.iloc[0]) - layer
         print(f"Timestamp: {timestamp}: Best max depth: {best_max_depth} with an F1 of {best_f1}, an increase of {best_f1 - train_f1}")
-        make_confusion_matrix(out_dir, t_pruned, train_x, train_y, test_x, test_y, int(timestamp), max_depth=best_max_depth)
+        make_confusion_matrix(out_dir, t_pruned, split_datasets["train"]["x"], split_datasets["train"]["y"], split_datasets["test"]["x"], split_datasets["test"]["y"], int(timestamp), max_depth=best_max_depth)
 
 
 if __name__ == "__main__":

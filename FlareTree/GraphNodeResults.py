@@ -88,7 +88,7 @@ def get_path(t, test_x, sample_id):
 
     # Now, it's possible to get the tests that were used to predict a sample or
     # a group of samples. First, let's make it for the sample.
-    is_strong_flare = bool(test_y.iloc[sample_id].iloc[0])  # gt
+    is_strong_flare = bool(split_datasets["train"]["y"].iloc[sample_id].iloc[0])  # gt
     node_index = node_indicator.indices[node_indicator.indptr[sample_id]:
                                         node_indicator.indptr[sample_id + 1]]
 
@@ -116,8 +116,8 @@ def get_path(t, test_x, sample_id):
             print("Decision node %s : (X[%s, %s] (= %s) %s %s)"
                   % (node_id,
                      sample_id,
-                     train_x.columns[feature[node_id]],
-                     test_x.iloc[sample_id, feature[node_id]], # <-- changed i to sample_id
+                     split_datasets["train"]["x"].columns[feature[node_id]],
+                     split_datasets["test"]["x"].iloc[sample_id, feature[node_id]], # <-- changed i to sample_id
                      threshold_sign,
                      threshold[node_id]))
 
@@ -250,13 +250,12 @@ results = tc.get_results_pickle(results_folderpath, run_nickname)
 
 for timestamp in results.minutes_since_start.tolist():
     t = tc.get_tree(out_dir, timestamp, trained=True)
-    train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y = tc.get_train_and_test_data_from_pkl(int(timestamp),
+    split_datasets = tc.get_train_and_test_data_from_pkl(int(timestamp),
                                                                                                                                         strong_flare_threshold,
                                                                                                                                         use_naive_diffs=use_naive_diffs,
                                                                                                                                         peak_filtering_minutes=peak_filtering_minutes,
                                                                                                                                         stratify=stratify,
                                                                                                                                         use_science_delay=use_science_delay)
-    # print_tree_structure(t, list(train_x.columns))
-    # get_path(t, test_x, sample_id=234)
-    get_confidence_graph(t, test_x, test_x_additional_flare_data, test_y, int(timestamp))
-    # get_science_goals_accuracy(test_x_flare_ids, test_x, test_y, int(timestamp))
+    # print_tree_structure(t, list(split_datasets["train"]["x"].columns))
+    # get_path(t, split_datasets["test"]["x"], sample_id=234)
+    get_confidence_graph(t, split_datasets["test"]["x"], split_datasets["test"]["additional_data"], split_datasets["test"]["y"], int(timestamp))

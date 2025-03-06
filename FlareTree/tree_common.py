@@ -28,6 +28,30 @@ def connect_to_flares_db(use_naive=False):
     return client, flares_table
 
 
+def get_temporal_test_set_flare_ids(client, parsed_flares_dir, time_minutes):
+
+    temporal_test_set_flare_ids = []
+    for flare_class in ["B", "<C", ">=C5", "M", "X"]:
+        this_flare_class_ids = []
+        if "C" in flare_class:
+            if "<" in flare_class:
+                filter = {'FlareClass': {'$regex': f'^C0|C1|C2|C3|C4'}, 'FlareID': {'$regex': '_0$'}}
+            else:
+                filter = {'FlareClass': {'$regex': f'^C5|C6|C7|C8|C9'}, 'FlareID': {'$regex': '_0$'}}
+        else:
+            filter = {'FlareClass': {'$regex': f'^{flare_class}'}, 'FlareID': {'$regex': '_0$'}}
+        project = {'FlareID': 1}
+        cursor = client['Flares']['NaiveFlares'].find(filter=filter, projection=project)
+        for record in cursor:
+            this_flare_class_ids.append(record["FlareID"].split("_")[0])
+        this_flare_class_ids = pd.DataFrame(np.array(this_flare_class_ids))
+        this_flare_class_ids = this_flare_class_ids.sample(frac=0.05, random_state=RANDOM_STATE).reset_index(drop=True)
+        for flare_id in this_flare_class_ids.values.tolist():
+            temporal_test_set_flare_ids.append(flare_id[0])
+    with open(os.path.join("Parsed Flares", parsed_flares_dir, f"Temporal_test_set_flare_ids_{time_minutes}_minutes_since_flare_start.pkl"), "wb") as f:
+        pickle.dump(temporal_test_set_flare_ids, f)
+
+
 def get_tree(results_dir, minutes_since_flare_start, trained=True):
 
     if trained:
@@ -83,12 +107,51 @@ def is_flare_strong(test_flux_level, threshold_letter_level="C", threshold_numbe
         return True
 
 
+def assign_is_strong_flare_column(df):
+
+    df["IsFlareClass>=C5"] = (((df.FlareClass.str.startswith("C") == True) &
+                               (df.FlareClass.str[1:].astype(float) >= 5.0)) |
+                               (df.FlareClass.str.startswith("M") == True) |
+                               (df.FlareClass.str.startswith("X") == True))
+
+    return df
+
+
+def get_temporal_test_set(tree_data, time_minutes, parsed_flares_dir):
+
+    df_temporal_test = pd.DataFrame()
+
+    with open(os.path.join("Parsed Flares", parsed_flares_dir, f"Temporal_test_set_flare_ids_{time_minutes}_minutes_since_flare_start.pkl"), "rb") as f:
+        temporal_test_set_flare_ids = pickle.load(f)
+
+    # extract the temporal_test dataset for full time testing first
+    # because of seeding these will be the same for all timestamps aside from blacklisted flares
+    for flare_id in temporal_test_set_flare_ids:
+        tree_data_row = tree_data[tree_data.FlareID == int(flare_id)]
+        df_temporal_test = pd.concat([df_temporal_test, tree_data_row], axis=0)
+        tree_data = tree_data.drop(index=tree_data_row.index)
+
+    df_temporal_test = df_temporal_test.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
+    temporal_test_x = df_temporal_test.iloc[:, :-1]
+    temporal_test_y = df_temporal_test.iloc[:, -1:]
+
+    temporal_test_x_additional_flare_data = pd.concat([temporal_test_x.FlareID, temporal_test_x.FlareClass, temporal_test_x.MinutesToPeak], axis=1)
+    temporal_test_x_additional_flare_data = temporal_test_x_additional_flare_data.reset_index()
+    temporal_test_x = temporal_test_x.drop(["FlareID"], axis=1)
+    temporal_test_x = temporal_test_x.drop(["FlareClass"], axis=1)
+    temporal_test_x = temporal_test_x.drop(["MinutesToPeak"], axis=1)
+
+    temporal_test_x_additional_flare_data = assign_is_strong_flare_column(temporal_test_x_additional_flare_data)
+
+    return {"x": temporal_test_x, "y": temporal_test_y, "additional_data": temporal_test_x_additional_flare_data}
+
+
 def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8):
 
     df_train = pd.DataFrame()
     df_test = pd.DataFrame()
 
-    # stratify based on teh combination of flare class and what max flux was observable
+    # stratify based on the combination of flare class and what max flux was observable
     for idx, flare_mag_letter in enumerate(["B", "C", "M", "X"]):
         for class_id in [0, 1, 2, 3]:  # TODO: Assuming multiclass for now, fix to accommodate binary if desired
             subset = tree_data[(tree_data.FlareClass.str.startswith(flare_mag_letter)) & (tree_data.IsStrongFlare == class_id)]
@@ -116,7 +179,11 @@ def get_stratified_training_and_test_sets(tree_data, train_proportion=0.8):
     test_x = test_x.drop(["FlareClass"], axis=1)
     test_x = test_x.drop(["MinutesToPeak"], axis=1)
 
-    return train_x, train_x_additional_flare_data, train_y, test_x, test_x_additional_flare_data, test_y
+    train_x_additional_flare_data = assign_is_strong_flare_column(train_x_additional_flare_data)
+    test_x_additional_flare_data = assign_is_strong_flare_column(test_x_additional_flare_data)
+
+    return {"train": {"x": train_x, "y": train_y, "additional_data": train_x_additional_flare_data},
+            "test": {"x": test_x, "y": test_y, "additional_data": test_x_additional_flare_data}}
 
 
 def get_training_and_test_sets(tree_data, train_proportion=0.8):
