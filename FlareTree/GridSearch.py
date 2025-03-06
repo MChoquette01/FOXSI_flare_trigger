@@ -90,7 +90,7 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     plt.cla()
 
 
-def plot_stratified_confusion_matricies(final_model, training_data, test_data, run_nickname):
+def plot_stratified_confusion_matricies(final_model, training_data, test_data, time_minutes, run_nickname):
 
     for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
         if not "C" in flare_class:
@@ -679,7 +679,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
     # plt.show()
 
-    plot_stratified_confusion_matricies(final_model, split_datasets["train"], split_datasets["test"], run_nickname)
+    plot_stratified_confusion_matricies(final_model, split_datasets["train"], split_datasets["test"], time_minutes, run_nickname)
 
     test_cm = confusion_matrix(split_datasets["test"]["y"], test_predictions)
     test_scores = get_confusion_matrix_stats(test_cm)
