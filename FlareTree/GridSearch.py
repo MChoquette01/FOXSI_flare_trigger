@@ -33,6 +33,8 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
         else:
             nans.append([train_x.columns[idx], 0.1])
     f_i = sorted(f_i, key=lambda x: x[1])
+    with open(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"feature_importances_{time_minutes}_minutes_since_flare_start.pkl"), "wb") as f:
+        pickle.dump(f_i, f)
     plt.figure(figsize=(16, 9))
     plt.barh([x for x in range(len(f_i))], [x[1] for x in f_i])
     plt.barh([x + len(f_i) for x in range(len(nans))], [x[1] for x in nans], color="red")
@@ -40,7 +42,10 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
     plt.xticks(fontsize=14)
     plt.xlabel("Normalized Total Reduction of Split Criteria", fontsize=20)
     plt.ylabel("Feature", fontsize=20)
-    plt.title(f"Feature Importance: {minutes_since_start - 15} minutes since start", fontsize=24)
+    if time_minutes - 15 < 0:
+        plt.title(f"Feature Importance: Flare Start -{abs(time_minutes - 15)} Minutes", fontsize=24)
+    else:
+        plt.title(f"Feature Importance: Flare Start +{abs(time_minutes - 15)} Minutes", fontsize=24)
     plt.tight_layout()
     plt.savefig(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
@@ -73,9 +78,12 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     ax[0].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
     ax[1].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
 
-    fig.suptitle(f"{time_minutes - 15} Minutes Since Flare Start", fontsize=30)
+    if time_minutes - 15 < 0:
+        fig.suptitle(f"Flare Start -{abs(time_minutes - 15)} Minutes", fontsize=30)
+    else:
+        fig.suptitle(f"Flare Start +{abs(time_minutes - 15)} Minutes", fontsize=30)
     plt.tight_layout()
-    fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start.png"))
+    fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"Confusion Matrix {time_minutes - 15} Minutes Since Start.png"))
     # plt.show()
     plt.close(fig)
     plt.clf()
@@ -122,13 +130,24 @@ def plot_stratified_confusion_matricies(final_model, training_data, test_data, r
         ax[0].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
         ax[1].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
 
-        fig.suptitle(f"True Flare Class: {flare_class}", fontsize=30)
+        if time_minutes - 15 < 0:
+            title_text = f"Flare Start -{abs(time_minutes - 15)} Minutes"
+        else:
+            title_text = f"Flare Start +{abs(time_minutes - 15)} Minutes"
+        if "C" not in flare_class:
+            title_text += f", True {flare_class} Class Flares Only"
+        else:
+            if "<" in flare_class:
+                title_text += ", True C0.0 - C4.9 Class Flares Only"
+            else:
+                title_text += ", True C5.0 - C9.9 Class Flares Only"
+        fig.suptitle(title_text, fontsize=30)
         plt.tight_layout()
         if "<" in flare_class:
-            flare_class = flare_class.replace("<", "Less Than")
+            flare_class = flare_class.replace("<", "Less Than ")
         elif ">=" in flare_class:
-            flare_class = flare_class.replace(">=", "Greater Than")
-        fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"True Class {flare_class} Confusion Matrix_{time_minutes} Minutes Since Start.png"))
+            flare_class = flare_class.replace(">=", "Greater Than ")
+        fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"Confusion Matrix {time_minutes - 15} Minutes Since Start True Class {flare_class}.png"))
         # plt.show()
         plt.close(fig)
         plt.clf()
@@ -502,6 +521,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
 
     split_datasets["train"]["x"].columns = list(tree_data.columns)[2:-2]
+    number_of_features = split_datasets["train"]["x"].shape[1]
 
     if model_type == "Tree":
         model = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
@@ -521,7 +541,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                       "min_samples_split": [x * 5 for x in range(1, 11)],
                       "min_samples_leaf": [x * 5 for x in range(1, 11)],
                       "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                      "max_features": [x for x in range(5, 23)],
+                      "max_features": [x for x in range(5, number_of_features)],
                       "class_weight": ["balanced"]}
 
     elif model_type == "Random Forest":
@@ -537,13 +557,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                       "class_weight": ["balanced"]}
         else:
             # Real deal parameters
-            params = {"n_estimators": [50 * x for x in range(2, 7)],
+            params = {"n_estimators": [100 * x for x in range(2, 5)],
                       "criterion": ["gini", "entropy"],
-                      "max_depth": [x for x in range(12, 15)],
-                      "min_samples_split": [x for x in range(10, 20)],
-                      "min_samples_leaf": [x for x in range(10, 20)],
+                      "max_depth": [5 * x for x in range(1, 5)],
+                      "min_samples_split": [5 * x for x in range(1, 4)],
+                      "min_samples_leaf": [5 * x for x in range(1, 4)],
                       "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                      "max_features": [x for x in range(5, 23)],
+                      "max_features": [x for x in range(5, number_of_features)],
                       "class_weight": ["balanced"]}
 
     elif model_type == "Gradient Boosted Tree":
@@ -563,14 +583,14 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         else:
             # Real deal parameters
             params = {"loss": ["log_loss"],
-                      "learning_rate": [0.05, 0.1, 0.15],
-                      "n_estimators": [50 * x for x in range(2, 7)],
+                      "learning_rate": [0.05, 0.1],
+                      "n_estimators": [100 * x for x in range(2, 5)],
                       "criterion": ["friedman_mse"],
-                      "max_depth": [x for x in range(12, 15)],
-                      "min_samples_split": [x for x in range(10, 20)],
-                      "min_samples_leaf": [x for x in range(10, 20)],
+                      "max_depth": [5 * x for x in range(1, 5)],
+                      "min_samples_split": [5 * x for x in range(1, 4)],
+                      "min_samples_leaf": [5 * x for x in range(1, 4)],
                       "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                      "max_features": [x for x in range(5, 23)]}
+                      "max_features": [x for x in range(5, number_of_features)]}
 
     # fun with custom scoring functions!
     def false_positive_scorer(y_true, y_predicted):
@@ -772,20 +792,19 @@ if __name__ == "__main__":
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "adjusted_precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
-        run_nickname = "savedatatest"
+        run_nickname = "nonaivetest"
         model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
-        use_naive_diffs = True
+        use_naive_diffs = False
         use_debug_mode = True
-        for time_minutes in range(10, 31):
-            grid_search(peak_filtering_threshold_minutes,
-                        time_minutes,
-                        strong_flare_threshold,
-                        nan_removal_strategy,
-                        scoring_metric,
-                        use_naive_diffs,
-                        output_folder,
-                        run_nickname,
-                        model_type,
-                        multiclass,
-                        use_debug_mode)
+        grid_search(peak_filtering_threshold_minutes,
+                    time_minutes,
+                    strong_flare_threshold,
+                    nan_removal_strategy,
+                    scoring_metric,
+                    use_naive_diffs,
+                    output_folder,
+                    run_nickname,
+                    model_type,
+                    multiclass,
+                    use_debug_mode)

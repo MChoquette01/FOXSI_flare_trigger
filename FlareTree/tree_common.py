@@ -20,10 +20,7 @@ def connect_to_flares_db(use_naive=False):
 
     client = MongoClient("mongodb://localhost:27017/")
     flares_db = client["Flares"]
-    if use_naive:
-        flares_table = flares_db["NaiveFlares"]
-    else:
-        flares_table = flares_db["Flares"]
+    flares_table = flares_db["NaiveFlares"]
 
     return client, flares_table
 
