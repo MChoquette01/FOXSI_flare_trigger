@@ -33,7 +33,7 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
         else:
             nans.append([train_x.columns[idx], 0.1])
     f_i = sorted(f_i, key=lambda x: x[1])
-    with open(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"feature_importances_{time_minutes}_minutes_since_flare_start.pkl"), "wb") as f:
+    with open(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"feature_importances_{minutes_since_start}_minutes_since_flare_start.pkl"), "wb") as f:
         pickle.dump(f_i, f)
     plt.figure(figsize=(16, 9))
     plt.barh([x for x in range(len(f_i))], [x[1] for x in f_i])
@@ -42,10 +42,10 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
     plt.xticks(fontsize=14)
     plt.xlabel("Normalized Total Reduction of Split Criteria", fontsize=20)
     plt.ylabel("Feature", fontsize=20)
-    if time_minutes - 15 < 0:
-        plt.title(f"Feature Importance: Flare Start -{abs(time_minutes - 15)} Minutes", fontsize=24)
+    if minutes_since_start - 15 < 0:
+        plt.title(f"Feature Importance: Flare Start -{abs(minutes_since_start - 15)} Minutes", fontsize=24)
     else:
-        plt.title(f"Feature Importance: Flare Start +{abs(time_minutes - 15)} Minutes", fontsize=24)
+        plt.title(f"Feature Importance: Flare Start +{abs(minutes_since_start - 15)} Minutes", fontsize=24)
     plt.tight_layout()
     plt.savefig(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
