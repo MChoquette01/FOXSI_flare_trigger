@@ -202,7 +202,6 @@ for flare_data in tqdm(all_data, desc="Writing Flares Database..."):
                                  "MinutesToPeak": minutes_to_peak,
                                  "CurrentXRSA": float(xrsa_datum) if xrsa_datum is not None else None,
                                  "CurrentXRSB": float(xrsb_datum) if xrsb_datum is not None else None,
-                                 "XRSBBackgroundFluxDifference": float(xrsb_datum) - float(flare_data["background flux"]) if xrsb_datum is not None else None,
                                  "XRSA1MinuteDifference": xrsa_1_minute_diff,
                                  "XRSB1MinuteDifference": xrsb_1_minute_diff,
                                  "XRSA2MinuteDifference": xrsa_2_minute_diff,

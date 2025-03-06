@@ -44,12 +44,14 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
     plt.tight_layout()
     plt.savefig(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
+    plt.close()
+    plt.clf()
+    plt.cla()
 
 
 def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold):
 
-    plt.clf()
-    fig, ax = plt.subplots(1, 2)
+    fig, ax = plt.subplots(1, 2, clear=True)
     fig.set_figwidth(25)
     fig.set_figheight(14)
     ax[0].set_title("Training", fontsize=24)
@@ -75,6 +77,9 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
     plt.tight_layout()
     fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start.png"))
     # plt.show()
+    plt.close(fig)
+    plt.clf()
+    plt.cla()
 
 
 def plot_stratified_confusion_matricies(final_model, training_data, test_data, run_nickname):
@@ -100,8 +105,7 @@ def plot_stratified_confusion_matricies(final_model, training_data, test_data, r
 
         train_display_labels = [f"< C5", f">= C5", f"M", f"X"][:len(list(set(train_subset_y.IsStrongFlare.tolist() + train_subset_predictions.tolist())))]
         test_display_labels = [f"< C5", f">= C5", f"M", f"X"][:len(list(set(test_subset_y.IsStrongFlare.tolist() + test_subset_predictions.tolist())))]
-        # plt.clf()
-        fig, ax = plt.subplots(1, 2)
+        fig, ax = plt.subplots(1, 2, clear=True)
         fig.set_figwidth(25)
         fig.set_figheight(14)
         ax[0].set_title("Training", fontsize=24)
@@ -126,6 +130,9 @@ def plot_stratified_confusion_matricies(final_model, training_data, test_data, r
             flare_class = flare_class.replace(">=", "Greater Than")
         fig.savefig(os.path.join(output_folder, "Results", run_nickname, "Confusion Matrices", f"True Class {flare_class} Confusion Matrix_{time_minutes} Minutes Since Start.png"))
         # plt.show()
+        plt.close(fig)
+        plt.clf()
+        plt.cla()
 
 
 def get_confusion_matrix_stats(cm):
@@ -248,7 +255,6 @@ class Flare:
         self.minutes_to_peak = db_entry["MinutesToPeak"]
         self.current_xrsa = db_entry["CurrentXRSA"]
         self.current_xrsb = db_entry["CurrentXRSB"]
-        self.xrsb_background_flux_difference = db_entry["XRSBBackgroundFluxDifference"]
         self.xrsa_one_minute_difference = db_entry["XRSA1MinuteDifference"]
         self.xrsa_two_minute_difference = db_entry["XRSA2MinuteDifference"]
         self.xrsa_three_minute_difference = db_entry["XRSA3MinuteDifference"]
@@ -394,7 +400,6 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                       flare.xrsb_three_minute_difference,
                                       flare.xrsb_four_minute_difference,
                                       flare.xrsb_five_minute_difference,
-                                      flare.xrsb_background_flux_difference,
                                       flare.temperature,
                                       flare.temperature_one_minute_difference,
                                       flare.temperature_two_minute_difference,
@@ -433,7 +438,6 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                                       flare.xrsb_three_minute_difference,
                                       flare.xrsb_four_minute_difference,
                                       flare.xrsb_five_minute_difference,
-                                      flare.xrsb_background_flux_difference,
                                       flare.temperature,
                                       flare.temperature_one_minute_difference,
                                       flare.temperature_two_minute_difference,
@@ -459,7 +463,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
             tree_data.columns = ["FlareID", "MinutesToPeak", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA2MinuteDifference",
                                  "XRSA3MinuteDifference", "XRSA4MinuteDifference", "XRSA5MinuteDifference", "CurrentXRSB",
                                  "XRSB1MinuteDifference", "XRSB2MinuteDifference", "XRSB3MinuteDifference",
-                                 "XRSB4MinuteDifference", "XRSB5MinuteDifference", "XRSBBackgroundFluxDifference", "Temperature", "Temperature1MinuteDifference",
+                                 "XRSB4MinuteDifference", "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
                                  "Temperature2MinuteDifference", "Temperature3MinuteDifference", "Temperature4MinuteDifference",
                                  "Temperature5MinuteDifference", "EmissionMeasure", "EmissionMeasure1MinuteDifference", "EmissionMeasure2MinuteDifference",
                                  "EmissionMeasure3MinuteDifference", "EmissionMeasure4MinuteDifference", "EmissionMeasure5MinuteDifference",
@@ -472,7 +476,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
             tree_data.columns = ["FlareID", "MinutesToPeak", "CurrentXRSA", "XRSA1MinuteDifference", "XRSA2MinuteDifference",
                                  "XRSA3MinuteDifference", "XRSA4MinuteDifference", "XRSA5MinuteDifference", "CurrentXRSB",
                                  "XRSB1MinuteDifference", "XRSB2MinuteDifference", "XRSB3MinuteDifference",
-                                 "XRSB4MinuteDifference", "XRSB5MinuteDifference", "XRSBBackgroundFluxDifference", "Temperature", "Temperature1MinuteDifference",
+                                 "XRSB4MinuteDifference", "XRSB5MinuteDifference", "Temperature", "Temperature1MinuteDifference",
                                  "Temperature2MinuteDifference", "Temperature3MinuteDifference", "Temperature4MinuteDifference",
                                  "Temperature5MinuteDifference", "EmissionMeasure", "EmissionMeasure1MinuteDifference", "EmissionMeasure2MinuteDifference",
                                  "EmissionMeasure3MinuteDifference", "EmissionMeasure4MinuteDifference", "EmissionMeasure5MinuteDifference", "FlareClass", "IsStrongFlare"]
@@ -503,12 +507,12 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         model = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
         if debug_mode:
             # Test parameters, should run in a few minutes for ~30 trees
-            params = {"criterion": ["gini", "entropy"],
+            params = {"criterion": ["gini"],
                       "max_depth": [x for x in range(12, 15)],
                       "min_samples_split": [x for x in range(4, 5)],
                       "min_samples_leaf": [x for x in range(1, 2)],
                       "min_weight_fraction_leaf": [x / 10 for x in range(2)],
-                      "max_features": [x for x in range(5, 17)],
+                      "max_features": [x for x in range(5, 7)],
                       "class_weight": ["balanced"]}
         else:
             # Real deal parameters
@@ -705,6 +709,9 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         plot_tree(final_model, feature_names=split_datasets["train"]["x"].columns, class_names=[f"< C5", f"<= C5 x < M0", f"<= M0 x < X0", f">= X0"], filled=True, proportion=True, rounded=True, precision=9, fontsize=10)
     graph_out_path = os.path.join(output_folder, "Results", run_nickname, "Tree Graphs", f"{time_minutes}_minutes_since_start_tree.png")
     plt.savefig(graph_out_path)
+    plt.close()
+    plt.clf()
+    plt.cla()
 
     results = pd.DataFrame(np.array(results))
     results.columns = ["minutes_since_start", "total_number_of_flares", "number_of_weak_flares", "number_of_strong_flares",
@@ -770,14 +777,15 @@ if __name__ == "__main__":
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = True
         use_debug_mode = True
-        grid_search(peak_filtering_threshold_minutes,
-                    time_minutes,
-                    strong_flare_threshold,
-                    nan_removal_strategy,
-                    scoring_metric,
-                    use_naive_diffs,
-                    output_folder,
-                    run_nickname,
-                    model_type,
-                    multiclass,
-                    use_debug_mode)
+        for time_minutes in range(10, 31):
+            grid_search(peak_filtering_threshold_minutes,
+                        time_minutes,
+                        strong_flare_threshold,
+                        nan_removal_strategy,
+                        scoring_metric,
+                        use_naive_diffs,
+                        output_folder,
+                        run_nickname,
+                        model_type,
+                        multiclass,
+                        use_debug_mode)
