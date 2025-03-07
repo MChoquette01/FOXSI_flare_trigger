@@ -43,9 +43,9 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
     plt.xlabel("Normalized Total Reduction of Split Criteria", fontsize=20)
     plt.ylabel("Feature", fontsize=20)
     if minutes_since_start - 15 < 0:
-        plt.title(f"Feature Importance: Flare Start -{abs(minutes_since_start - 15)} Minutes", fontsize=24)
+        plt.title(f"Feature Importance: Flare Start - {abs(minutes_since_start - 15)} Minutes", fontsize=24)
     else:
-        plt.title(f"Feature Importance: Flare Start +{abs(minutes_since_start - 15)} Minutes", fontsize=24)
+        plt.title(f"Feature Importance: Flare Start + {abs(minutes_since_start - 15)} Minutes", fontsize=24)
     plt.tight_layout()
     plt.savefig(os.path.join(output_folder, "Results", run_nickname, "Feature Importance", f"FeatureImportance_{minutes_since_start}_minutes_since_start.png"))
     # plt.show()
@@ -131,9 +131,9 @@ def plot_stratified_confusion_matricies(final_model, training_data, test_data, t
         ax[1].set_ylabel("True Maximum Observable XRSB Flux", fontsize=24)
 
         if time_minutes - 15 < 0:
-            title_text = f"Flare Start -{abs(time_minutes - 15)} Minutes"
+            title_text = f"Flare Start - {abs(time_minutes - 15)} Minutes"
         else:
-            title_text = f"Flare Start +{abs(time_minutes - 15)} Minutes"
+            title_text = f"Flare Start + {abs(time_minutes - 15)} Minutes"
         if "C" not in flare_class:
             title_text += f", True {flare_class} Class Flares Only"
         else:
@@ -629,7 +629,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     elif scoring_metric == "balanced_accuracy":
         scoring_metric = balanced_accuracy_scorer
 
-    gs = GridSearchCV(model, params, scoring=scoring_metric, n_jobs=3)
+    gs = GridSearchCV(model, params, scoring=scoring_metric, n_jobs=5)
     gs.fit(split_datasets["train"]["x"].values, split_datasets["train"]["y"].values.ravel())
     best_params = gs.best_params_
     # print(best_params)
@@ -787,13 +787,13 @@ if __name__ == "__main__":
     # run here
     else:
         peak_filtering_threshold_minutes = -10000
-        time_minutes = 10
+        time_minutes = 12
         strong_flare_threshold = "C5.0"  # inclusive to strong flares
         nan_removal_strategy = "linear_interpolation"
         scoring_metric = "adjusted_precision"
         output_folder = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree"
         run_nickname = "nonaivetest"
-        model_type = "Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
+        model_type = "Gradient Boosted Tree"  # 'Tree', 'Random Forest' or 'Gradient Boosted Tree'
         multiclass = True  # else it's binary. If True, overrides strong_flare_threshold
         use_naive_diffs = False
         use_debug_mode = True
