@@ -195,12 +195,12 @@ def graph_flare_count(results, strong_flare_threshold):
 
 
 results_folderpath = r"C:\Users\matth\Documents\Capstone\FOXSI_flare_trigger\FlareTree\MSI Results"
-run_nickname = "2025_02_16_multiclass_precision_interpolation_no_filter_science_delay_stratified_rf"
+run_nickname = "2025_03_08_multiclass_naive_adjusted_precision_rf"
 inputs = tc.get_inputs_dict(results_folderpath, run_nickname)
 peak_filtering_minutes = inputs['peak_filtering_threshold_minutes']
 strong_flare_threshold = inputs['strong_flare_threshold']
 use_naive_diffs = inputs['use_naive_diffs']
-use_science_delay = inputs["use_science_delay"]
+# use_science_delay = inputs["use_science_delay"]
 stratify = inputs["stratify"]
 
 results = tc.get_results_pickle(results_folderpath, run_nickname)
