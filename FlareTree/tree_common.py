@@ -316,3 +316,41 @@ def create_tree(criterion, max_depth, max_features, min_samples_leaf, min_sample
                                random_state=RANDOM_STATE)
 
     return t
+
+FORMAL_VARIABLE_NAMES = {"CurrentXRSA": "XRSA Flux",
+                         "XRSA1MinuteDifference": "XRSA 1-Minute Difference",
+                         "XRSA2MinuteDifference": "XRSA 2-Minute Difference",
+                         "XRSA3MinuteDifference": "XRSA 3-Minute Difference",
+                         "XRSA4MinuteDifference": "XRSA 4-Minute Difference",
+                         "XRSA5MinuteDifference": "XRSA 5-Minute Difference",
+                         "CurrentXRSB": "XRSB Flux",
+                         "XRSB1MinuteDifference": "XRSB 1-Minute Difference",
+                         "XRSB2MinuteDifference": "XRSB 2-Minute Difference",
+                         "XRSB3MinuteDifference": "XRSB 3-Minute Difference",
+                         "XRSB4MinuteDifference": "XRSB 4-Minute Difference",
+                         "XRSB5MinuteDifference": "XRSB 5-Minute Difference",
+                         "Temperature": "Temperature",
+                         "Temperature1MinuteDifference": "Temperature from 1-Minute XRS Difference",
+                         "Temperature2MinuteDifference": "Temperature from 2-Minute XRS Difference",
+                         "Temperature3MinuteDifference": "Temperature from 3-Minute XRS Difference",
+                         "Temperature4MinuteDifference": "Temperature from 4-Minute XRS Difference",
+                         "Temperature5MinuteDifference": "Temperature from 5-Minute XRS Difference",
+                         "NaiveTemperature1MinuteDifference": "Temperature 1-Minute Difference",
+                         "NaiveTemperature2MinuteDifference": "Temperature 2-Minute Difference",
+                         "NaiveTemperature3MinuteDifference": "Temperature 3-Minute Difference",
+                         "NaiveTemperature4MinuteDifference": "Temperature 4-Minute Difference",
+                         "NaiveTemperature5MinuteDifference": "Temperature 5-Minute Difference",
+                         "EmissionMeasure": "Emission Measure",
+                         "EmissionMeasure1MinuteDifference": "Emission Measure from 1-Minute XRS Difference",
+                         "EmissionMeasure2MinuteDifference": "Emission Measure from 2-Minute XRS Difference",
+                         "EmissionMeasure3MinuteDifference": "Emission Measure from 3-Minute XRS Difference",
+                         "EmissionMeasure4MinuteDifference": "Emission Measure from 4-Minute XRS Difference",
+                         "EmissionMeasure5MinuteDifference": "Emission Measure from 5-Minute XRS Difference",
+                         "NaiveEmissionMeasure1MinuteDifference": "Emission Measure 1-Minute Difference",
+                         "NaiveEmissionMeasure2MinuteDifference": "Emission Measure 2-Minute Difference",
+                         "NaiveEmissionMeasure3MinuteDifference": "Emission Measure 3-Minute Difference",
+                         "NaiveEmissionMeasure4MinuteDifference": "Emission Measure 4-Minute Difference",
+                         "NaiveEmissionMeasure5MinuteDifference": "Emission Measure 5-Minute Difference",
+
+
+                         }
