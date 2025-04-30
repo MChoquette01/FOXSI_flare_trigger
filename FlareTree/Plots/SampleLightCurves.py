@@ -19,7 +19,7 @@ def get_data_for_hardcoded_flares():
         # now get all XRSB datums for this flare
         filter = {'FlareID': {'$regex': f'^{flare_id}'}}
         projection = {'CurrentXRSB': 1}
-        sort = list({'MinutesToPeak': -1}.items())
+        sort = list({'MinutesToPeak': -1}.items())  # sort chronologically
         cursor = flares_table.find(filter=filter, projection=projection, sort=sort)
         data_to_graph[flare_id] = []
         for idx, record in enumerate(cursor):

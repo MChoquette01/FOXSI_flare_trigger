@@ -34,18 +34,19 @@ datum_name_map = {"CurrentXRSA": "XRSA",
 
 datums = defaultdict(list)
 
+# find info for the selected flare
 client, flares_table = tc.connect_to_flares_db()
 filter={'FlareID': {'$regex': f'^{flare_id}'}}
 projection = {}
 for datum in datums_to_graph:
     projection[datum] = 1
-sort = list({'MinutesToPeak': -1}.items())
+sort = list({'MinutesToPeak': -1}.items())  # sort chronologically
 cursor = flares_table.find(filter=filter, projection=projection, sort=sort)
 for record in cursor:
     for datum in datums_to_graph:
         datums[datum].append(record[datum])
-foo = 2
 
+# graph
 for datum_name, values in datums.items():
     plt.plot([x - 15 for x in range(len(values))], values, label=datum_name_map[datum_name])
 plt.ylabel("W/m^2")

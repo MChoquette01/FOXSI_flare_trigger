@@ -42,7 +42,7 @@ nicknames = [decision_tree_nickname, random_forest_nickname, gbdt_nickname,
 metrics = ["adjusted_precision", "adjusted_recall", "adjusted_f1"]
 colors = ["lightblue", "peachpuff", "lawngreen", "dodgerblue", "darkorange", "green"]
 
-
+# gather perforamnce data after each stage
 for model_type, nickname in zip(models, nicknames):
     pruned_scores_filepath = os.path.join(results_dir, nickname, "Pruning", "Pruning Confusion Matrices", "Pruning Effects.csv")
     cancelled_scores_filepath = os.path.join(results_dir, nickname, "Cancellation Analysis", "Cancellation Confusion Matrices", "Cancellation Effects.csv")
@@ -63,6 +63,7 @@ for model_type, nickname in zip(models, nicknames):
 xs = [x for x in range(-5, 16)]
 yticks = [x / 10 for x in range(11)]
 
+# Plot precision, recall and F! after training, pruning and cancellation
 for model_type, formal_model_name, color in zip(models, formal_model_names, colors):
     plt.figure(figsize=(16, 9))
     plt.plot(xs, all_scores[model_type]["training"]["adjusted_precision"], color='greenyellow', label="Training")

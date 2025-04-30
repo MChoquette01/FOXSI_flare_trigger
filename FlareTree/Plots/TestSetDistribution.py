@@ -17,6 +17,6 @@ with open(datasets_filepath, 'rb') as f:
 flare_classes = split_datasets["test"]["additional_data"].FlareClass.values
 flare_mags = sorted([x[:1] for x in flare_classes])
 letter_counts = Counter(flare_mags)
-df = pandas.DataFrame.from_dict(letter_counts, orient='index')
-df.plot(kind='bar')
+flare_mags_df = pandas.DataFrame.from_dict(letter_counts, orient='index')
+flare_mags_df.plot(kind='bar')
 plt.show()

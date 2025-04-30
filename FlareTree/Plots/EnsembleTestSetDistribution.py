@@ -8,6 +8,7 @@ from collections import Counter
 
 output_dir = r"C:../MSI Results\2025_03_21_multiclass_naive_adjusted_precision_gbdt"
 
+# read in split datasets
 # minutes don't matter since we're using GOES class here...use 0
 datasets_filepath = os.path.join(output_dir, "Datasets", "split_datasets0_minutes_since_start.pkl")
 with open(datasets_filepath, 'rb') as f:
@@ -16,6 +17,6 @@ with open(datasets_filepath, 'rb') as f:
 flare_classes = split_datasets["temporal_test"]["additional_data"].FlareClass.values
 flare_mags = sorted([x[:2] for x in flare_classes])  # first two characters only
 letter_counts = Counter(flare_mags)
-df = pandas.DataFrame.from_dict(letter_counts, orient='index')
-df.plot(kind='bar')
+flare_mags_df = pandas.DataFrame.from_dict(letter_counts, orient='index')
+flare_mags_df.plot(kind='bar')
 plt.show()

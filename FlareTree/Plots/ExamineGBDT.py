@@ -10,6 +10,7 @@ run_nickname = "2025_03_21_multiclass_naive_adjusted_precision_gbdt"
 sub_tree_index = 32
 
 for minutes_since_start in range(-5, 16):
+    # get data and model
     split_datasets_filepath = os.path.join(results_dir, run_nickname, "Datasets", f"split_datasets{minutes_since_start}_minutes_since_start.pkl")
     trained_tree_filepath = os.path.join(results_dir, run_nickname, "Trees", f"trained_{minutes_since_start}_minutes_since_start")
     with open(trained_tree_filepath, 'rb') as f:

@@ -17,14 +17,16 @@ naive_decision_tree_nickname = "2025_03_06_multiclass_naive_adjusted_precision_d
 naive_random_forest_nickname = "2025_03_08_multiclass_naive_adjusted_precision_rf"
 naive_gbdt_nickname = "2025_03_21_multiclass_naive_adjusted_precision_gbdt"
 
+# store feature importances for pre/early flare stages
 all_imporatances = {"tree": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
-              "random_forest": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
-              "gbdt": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
-              "naive_tree": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
-              "naive_random_forest": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
-              "naive_gbdt": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)}}
+                    "random_forest": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
+                    "gbdt": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
+                    "naive_tree": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
+                    "naive_random_forest": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)},
+                    "naive_gbdt": {"pre-flare": defaultdict(list), "early_flare": defaultdict(list)}}
 
 models = list(all_imporatances.keys())
+# Pretty names for graphing
 formal_model_names = ["Decision Tree (XRS Differences Only)", "Random Forest (XRS Differences Only)", "Gradient Boosted Tree (XRS Differences Only)",
                       "Decision Tree", "Random Forest", "Gradient Boosted Tree"]
 nicknames = [decision_tree_nickname, random_forest_nickname, gbdt_nickname,
@@ -57,6 +59,7 @@ for model_type in models:
     for feature, importances in all_imporatances[model_type]["early_flare"].items():
         all_imporatances[model_type]["early_flare"][feature] = sum(importances) / len(importances)
 
+# Graph
 for model_type, model_name in zip(models, formal_model_names):
     fig, ax = plt.subplots(1, 2, sharey=True)
     fig.set_figheight(9)
@@ -68,6 +71,7 @@ for model_type, model_name in zip(models, formal_model_names):
     ax[0].set_ylabel("Feature", fontsize=20)
     ax[0].set_title("Pre-Flare", fontsize=24)
 
+    # Add an annotation explaining what each group is
     textstr = '\n'.join((r'   1 - 5 minutes', r'before flare start'))
 
     props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
