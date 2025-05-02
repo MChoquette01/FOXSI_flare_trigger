@@ -65,11 +65,12 @@ def get_random_data():
 def graph(data_to_graph):
 
     flare_classes = ["B", "Low C", "High C", "M", "X"]
+    markers = [".", "^", "s", "x", "*", "+"]
 
     plt.figure(figsize=(16, 9))
-    for (flare_id, xrsb), flare_class in zip(data_to_graph.items(), flare_classes):
+    for (flare_id, xrsb), flare_class, marker in zip(data_to_graph.items(), flare_classes, markers):
         label = f"{flare_id[:4]}-{flare_id[4:6]}-{flare_id[6:8]}, {flare_class} Class"
-        plt.plot([x - 15 for x in range(len(xrsb))], xrsb, label=label)
+        plt.plot([x - 15 for x in range(len(xrsb))], xrsb, label=label, marker=marker)
     max_tick_mark = max([len(x) for x in list(data_to_graph.values())])
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.2e'))
     plt.xticks(ticks=[x for x in range(-15, max_tick_mark)][::5], labels=[x for x in range(-15, max_tick_mark)][::5], fontsize=20)
@@ -86,9 +87,9 @@ def graph(data_to_graph):
     # early flare inset
     plt.clf()
     plt.figure(figsize=(16, 9))
-    for (flare_id, xrsb), flare_class in zip(data_to_graph.items(), flare_classes):
+    for (flare_id, xrsb), flare_class, marker in zip(data_to_graph.items(), flare_classes, markers):
         label = f"{flare_id[:4]}-{flare_id[4:6]}-{flare_id[6:8]}, {flare_class} Class"
-        plt.plot([x - 15 for x in range(len(xrsb))][10:22], xrsb[10:22], label=label)
+        plt.plot([x - 15 for x in range(len(xrsb))][10:22], xrsb[10:22], label=label, marker=marker)
     max_tick_mark = 22
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%.2e'))
     plt.xticks(ticks=[x for x in range(-10, max_tick_mark)][::5], labels=[x for x in range(-10, max_tick_mark)][::5], fontsize=20)

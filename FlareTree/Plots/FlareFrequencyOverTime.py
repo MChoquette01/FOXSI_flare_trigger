@@ -64,6 +64,8 @@ plt.title("Temporal Magnitude Distribution of Solar Flares Analyzed", fontsize=2
 plt.ylabel("Flare Count", fontsize=22)
 plt.xlabel("Date (MM-YYYY)", fontsize=22)
 plt.legend(fontsize='xx-large')
+handles, labels = plt.gca().get_legend_handles_labels()
+plt.gca().legend(handles[::-1], labels[::-1], fontsize='xx-large')
 plt.tight_layout()
 # plt.show()
 if not os.path.exists("Saved Plots"):
