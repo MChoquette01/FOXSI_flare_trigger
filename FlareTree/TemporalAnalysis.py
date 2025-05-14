@@ -10,7 +10,8 @@ from collections import defaultdict
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import tree_common as tc
 
-"""Analysis models using the ensemble test set"""
+"""Analysis models using the ensemble test set.
+This will run a special holdout set on all 21 models simulating real-time use to analyze prediction consistency"""
 
 
 def get_temporal_test_results():
@@ -18,16 +19,17 @@ def get_temporal_test_results():
 
     # get trained trees
     trees = {}
-    for minutes in range(-5, 16):
-        trained_tree_path = os.path.join(results_folderpath, run_nickname, "Pruning", "Pruned Models", f"pruned_model_{minutes}_minutes_since_start.pkl")
+    for minutes_since_start in range(-5, 16):
+        trained_tree_path = os.path.join(results_folderpath, run_nickname, "Pruning", "Pruned Models", f"pruned_model_{minutes_since_start}_minutes_since_start.pkl")
         with open(trained_tree_path, "rb") as f:
-            trees[minutes] = pickle.load(f)
+            trees[minutes_since_start] = pickle.load(f)
 
-    # using 0 minutes because the TEMPORAL test set is teh same for all timestamps
+    # hardcoding 0 minutes because the TEMPORAL test set is the same for all timestamps, so it doesn't matter
     split_datasets_path = os.path.join(results_folderpath, run_nickname, "Datasets", "split_datasets0_minutes_since_start.pkl")
     with open(split_datasets_path, 'rb') as f:
         split_datasets = pickle.load(f)
 
+    # create dict of GT info and predictions from each model
     temporal_test_gt_and_results = pd.concat([split_datasets["temporal_test"]["additional_data"].FlareID,
                                               split_datasets["temporal_test"]["additional_data"].FlareClass,
                                               split_datasets["temporal_test"]["additional_data"]["IsFlareClass>=C5"]], axis=1)
@@ -47,10 +49,11 @@ def get_temporal_test_results():
 
 
 def make_cm_heatmaps(temporal_test_results):
-    """Saves a heatmap of predictions versus guess to succinctly aggregate all confusion matricies"""
+    """Saves a heatmap of predictions versus guess to succinctly aggregate all confusion matricies.
+    This plots predictions with TP/TN/FP/FN on the y-axis."""
 
     flare_class_scores = {}
-    for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
+    for flare_class in ["B", "<C5", ">=C5", "M", "X"]:  # filter by GOES flare class
         this_flare_class_scores = []
         xs = []
         ys = []
@@ -95,7 +98,8 @@ def make_cm_heatmaps(temporal_test_results):
 
 
 def get_class_heatmap(temporal_test_results):
-    """Saves a heatmap of predictions stratified by the true flare class"""
+    """Saves a heatmap of predictions stratified by the true flare class..
+    This plots predictions with predicted class on the y-axis."""
 
     for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
         if not "C" in flare_class:
@@ -133,8 +137,9 @@ def get_class_heatmap(temporal_test_results):
 
 
 def consistency_analysis(temporal_test_results, formal_model_name):
+    """Plots showing how consistently accurate predictions are over time"""
 
-    flare_accuracy_count = defaultdict(list)
+    flare_accuracy_count = defaultdict(list)  # save results, count number of correct (TP or TN) predictions per model
     for minutes_since_start in range(-5, 16):
         gt_and_preds_at_time = temporal_test_results.loc[:, ["FlareID", f"GT{minutes_since_start}MinutesSinceStart", f"Prediction{minutes_since_start}MinutesSinceStart"]]
         for idx, row in gt_and_preds_at_time.iterrows():
@@ -169,7 +174,8 @@ def consistency_analysis(temporal_test_results, formal_model_name):
     plt.tight_layout()
     plt.savefig(os.path.join(results_folderpath, run_nickname, "Temporal Analysis", f"{formal_model_name} Temporal Test Set Accuracy By Minute.png"))
 
-    # now, same thing for flares >= C5 GOES class
+    # The above results are usually very rosy because of the wealth of true negatives.
+    # Now, do the same thing for flares >= C5 GOES class only
     strong_flare_subset = temporal_test_results[temporal_test_results["IsFlareClass>=C5"] == True]
     flare_accuracy_count = defaultdict(list)
     for minutes_since_start in range(-5, 16):

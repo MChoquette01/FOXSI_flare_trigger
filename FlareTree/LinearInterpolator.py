@@ -22,15 +22,16 @@ def pad_list(datum_list):
 
 
 def do_interpolate(to_interpolate, flare_ids, variable_name):
+    """Conduct linear interpolation on a set of flare variables"""
 
     x = pad_list(to_interpolate)
     x = pd.DataFrame(np.array(x), dtype=np.float64).T
     for time_minutes in range(10, 31):
         timestamp_flare_ids = deepcopy(flare_ids)
-        x_truncated = x.iloc[:time_minutes + 1, :]
+        x_truncated = x.iloc[:time_minutes + 1, :]  # only look at information known at this point in time, like live use!
         x_truncated = x_truncated.interpolate(method='linear', limit_direction='both')
         x_truncated.columns = timestamp_flare_ids
-        # remove blacklisted flare IDs from column labels
+        # remove blacklisted flare IDs from column labels - flares with all NaNs in at least one column
         blacklist_pkl_filepath = rf"Interpolations\BlacklistedFlares\{time_minutes - 15}_minutes_since_start.pkl"
         if os.path.exists(blacklist_pkl_filepath):
             with open(blacklist_pkl_filepath, "rb") as f:
@@ -50,6 +51,7 @@ def do_interpolate(to_interpolate, flare_ids, variable_name):
 
 
 def create_interpolated_table_for_timestamp(use_naive_diffs=False):
+    """Extract data from database to interpolate over"""
 
     uninterpolated_values = defaultdict(list)
     client, flares_table = tc.connect_to_flares_db(use_naive=use_naive_diffs)
@@ -189,7 +191,8 @@ cols = ["CurrentXRSA", "XRSBBackgroundFluxDifference", "XRSA1MinuteDifference",
 
 
 def check_for_bad_flares():
-
+    """Find flares for which all values are NaN in at least one column.
+    These are not able to be used in Random Forests and Gradient Boosted Trees"""
     for time_minutes in range(-5, 16):
         bad_flares_for_timestamp = []
         for col in cols:

@@ -18,7 +18,7 @@ import tree_common as tc
 import warnings
 warnings.filterwarnings("ignore", message="Precision is ill-defined and being set to 0.0 due to no predicted samples. Use `zero_division` parameter to control this behavior.")
 
-"""Run GridSearchCV on flares from MongoDB"""
+"""Run GridSearchCV on flares from MongoDB. This is the main script to trian models!"""
 
 
 def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run_nickname):
@@ -37,6 +37,7 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
         pickle.dump(f_i, f)
     plt.figure(figsize=(16, 9))
     plt.barh([x for x in range(len(f_i))], [x[1] for x in f_i])
+    #TODO: sometimes NaN values are kicked back (why?) Handle by plotting in red in arbitray leangth so we know something is amiss
     plt.barh([x + len(f_i) for x in range(len(nans))], [x[1] for x in nans], color="red")
     plt.yticks(ticks=[x for x in range(len(f_i) + len(nans))], labels=[x[0] for x in f_i + nans], fontsize=14)
     plt.xticks(fontsize=14)
@@ -55,7 +56,7 @@ def graph_feature_importance(output_folder, t, minutes_since_start, train_x, run
 
 
 def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, test_predictions, run_nickname, time_minutes, strong_flare_threshold):
-
+    """Graph training and test set confusion matricies for the model"""
     fig, ax = plt.subplots(1, 2, clear=True)
     fig.set_figwidth(25)
     fig.set_figheight(14)
@@ -91,12 +92,13 @@ def graph_confusion_matrices(output_folder, train_y, train_predictions, test_y, 
 
 
 def plot_stratified_confusion_matricies(final_model, training_data, test_data, time_minutes, run_nickname, output_folder):
-
+    """Plot confusion matricies for the training and test sets with only one target class considered at a time"""
     for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
         if not "C" in flare_class:
             test_relevant_indicies = test_data["additional_data"].index[test_data["additional_data"].FlareClass.str.startswith(flare_class)].tolist()
             train_relevant_indicies = training_data["additional_data"].index[training_data["additional_data"].FlareClass.str.startswith(flare_class)].tolist()
         else:
+            # if C in name, breakout further by less than/greater than C5
             if flare_class == "<C5":
                 test_relevant_indicies = test_data["additional_data"].index[(test_data["additional_data"].FlareClass.str.startswith("C")) & (test_data["additional_data"]["IsFlareClass>=C5"] == False)].tolist()
                 train_relevant_indicies = training_data["additional_data"].index[(training_data["additional_data"].FlareClass.str.startswith("C")) & (training_data["additional_data"]["IsFlareClass>=C5"] == False)].tolist()
@@ -155,6 +157,9 @@ def plot_stratified_confusion_matricies(final_model, training_data, test_data, t
 
 
 def get_confusion_matrix_stats(cm):
+    """Calculate CLASS-BASED model performance stats from a confusion matrix.
+    These are not the 'adjusted' performance metrics normally used here
+    See get_additional_scores() for that."""
     tp = np.diag(cm)
 
     results = {"Precision": [],
@@ -178,7 +183,7 @@ def get_confusion_matrix_stats(cm):
 
 
 def get_additional_scores(y_true, y_pred, test_x_additional_data, time_minutes, label, run_nickname, output_folder):
-
+    """Calculates ADJUSTED scores primarily used to gauge model performance"""
     # assemble scores DF
     scores_df = []
     for idx, row in test_x_additional_data.iterrows():
@@ -195,22 +200,23 @@ def get_additional_scores(y_true, y_pred, test_x_additional_data, time_minutes, 
     for row_idx in range(0, 4):
         for col_idx in range(0, 4):
             subset = scores_df[(scores_df.GT == str(float(row_idx))) & (scores_df.Prediction == str(float(col_idx)))]
-            if row_idx == 0:
-                if col_idx == 0:
-                    tn += subset.shape[0]
+            if row_idx == 0:  # if <C5 in groundtruth...
+                if col_idx == 0:  # ...if predicted as <C5...
+                    tn += subset.shape[0]  # ...good!
                 else:
-                    fp += subset.shape[0]
-            else:
-                if col_idx == 0:
-                    fn += subset.shape[0]
+                    fp += subset.shape[0]  # ...bad...predicted as >=C5
+            else:  # if >=C5 in groundtruth...
+                if col_idx == 0:  #...and predicted as <C5...
+                    fn += subset.shape[0]  #...bad...underestimated
                 else:
-                    tp += subset.shape[0]
+                    tp += subset.shape[0]  # ...good!
 
+    # let sklearn do the heavy lifting and calculate stats for us
     report = classification_report(y_true, y_pred, labels=[0, 1, 2, 3], digits=2, output_dict=True, zero_division='warn')
     if "accuracy" not in list(report.keys()):  # can happen if no flare in GT class, usually for temporal_test set
         report["accuracy"] = "N/A"
     # format nice for CSV output
-    row_names = ["<C5", ">=C5", "M", "X", "Adjusted", "Micro", "Macro", "Weighted", "Total"]
+    row_names = ["<C5", ">=C5", "M", "X", "Adjusted", "Micro", "Macro", "Weighted", "Total"]  # pretty print row names
     output = []
     for row, row_name in zip([x for x in range(0, 4)] + ["adjusted", "micro avg", "macro avg", "weighted avg", "total"], row_names):
         if row_name != "Total" and row_name != "Micro" and row_name != "Adjusted":
@@ -313,8 +319,8 @@ class Flare:
 
 
 def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_threshold, nan_removal_strategy, scoring_metric, use_naive_diffs, output_folder, run_nickname, model_type, multiclass, debug_mode, stratify=True):
-
-    # save for reproducibility
+    """Main function for training a model"""
+    # save inputs for reproducibility
     inputs = {"peak_filtering_threshold_minutes": peak_filtering_threshold_minutes,
               "time_minutes": time_minutes,
               "strong_flare_threshold": strong_flare_threshold,
@@ -366,7 +372,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
         # get temporal_test set that won't be touched in testing or trained
         tc.get_temporal_test_set_flare_ids(client, parsed_flares_dir, time_minutes)
 
-        # remove blacklisted flare IDs
+        # remove blacklisted flare IDs (flares for which there is only NaN values in at least one columne)
         blacklisted_flares_filepath = rf"Interpolations/BlacklistedFlares/{time_minutes - 15}_minutes_since_start.pkl"
         with open(blacklisted_flares_filepath, "rb") as f:
             blacklisted_flares = pickle.load(f)
@@ -377,6 +383,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
             regex_string += f"_{timestamp}|"
         regex_string = regex_string[:-1]
 
+        # get XRSB flux values that would be observed should the countdown start now
         xrsbs_during_observation = []
         filter = {'FlareID': {'$regex': regex_string}}
         project = {'CurrentXRSB': 1, 'FlareID': 1}
@@ -399,7 +406,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
         client.close()
 
-        tree_data = []
+        tree_data = []  # put input data for models here
         flare_classes = []  # handle separately because these are strings, not ints
         for flare in tqdm(parsed_flares, desc=f"Parsing flares ({time_minutes} minutes since start)..."):
             if flare.minutes_from_start == time_minutes and flare.minutes_to_peak > peak_filtering_threshold_minutes:
@@ -523,6 +530,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     split_datasets["train"]["x"].columns = list(tree_data.columns)[2:-2]
     number_of_features = split_datasets["train"]["x"].shape[1]
 
+    # Decision Tree
     if model_type == "Tree":
         model = DecisionTreeClassifier(random_state=tc.RANDOM_STATE)
         if debug_mode:
@@ -544,6 +552,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                       "max_features": [x for x in range(5, number_of_features)],
                       "class_weight": ["balanced"]}
 
+    # Random Forest
     elif model_type == "Random Forest":
         model = RandomForestClassifier(random_state=tc.RANDOM_STATE)
         if debug_mode:
@@ -566,6 +575,7 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
                       "max_features": [x for x in range(5, number_of_features)],
                       "class_weight": ["balanced"]}
 
+    # GBDT
     elif model_type == "Gradient Boosted Tree":
         model = GradientBoostingClassifier(random_state=tc.RANDOM_STATE)
         if debug_mode:
@@ -594,25 +604,31 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
 
     # fun with custom scoring functions!
     def false_positive_scorer(y_true, y_predicted):
+        """Scorer to reduce false positives"""
         cm = confusion_matrix(y_true, y_predicted)
         tn, fp, fn, tp = cm.ravel()
         return fp / (tn + fp)
 
     def precision_scorer(y_true, y_predicted):
+        """Scorer to maximize macro precision"""
         return precision_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
     def adjusted_precision_scorer(y_true, y_predicted):
+        """Scorer for adjusted precision"""
         cm = confusion_matrix(y_true, y_predicted)
         tp = cm[1:4, 1:4].sum()
         fp = sum(cm[0, 1:4])
         return tp / (tp + fp)
 
     def f1_scorer(y_true, y_predicted):
+        """Scorer to maximize F1"""
         return f1_score(y_true, y_predicted, average='macro', zero_division=np.nan)
 
     def balanced_accuracy_scorer(y_true, y_predicted):
+        """Scorer to maximize balanced accuracy"""
         return balanced_accuracy_score(y_true, y_predicted)
 
+    # initialize scorers
     fpr_scorer = make_scorer(false_positive_scorer, greater_is_better=False)
     p_scorer = make_scorer(precision_scorer, greater_is_better=True)
     adjusted_p_scorer = make_scorer(adjusted_precision_scorer, greater_is_better=True)
@@ -629,12 +645,13 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     elif scoring_metric == "balanced_accuracy":
         scoring_metric = balanced_accuracy_scorer
 
+    # do the actual training!
     gs = GridSearchCV(model, params, scoring=scoring_metric, n_jobs=5)
     gs.fit(split_datasets["train"]["x"].values, split_datasets["train"]["y"].values.ravel())
     best_params = gs.best_params_
     # print(best_params)
     # print(gs.best_score_)
-    # initialize the best tree
+    # initialize the best model
     if model_type == "Tree":
         final_model = DecisionTreeClassifier(criterion=best_params["criterion"],
                                              max_depth=best_params["max_depth"],
@@ -676,9 +693,8 @@ def grid_search(peak_filtering_threshold_minutes, time_minutes, strong_flare_thr
     test_predictions = final_model.predict(split_datasets["test"]["x"].values)
 
     # create confusion matrices (or rather, the related stats) for training and test sets
-    # ConfusionMatrixDisplay.from_predictions(test_y, predictions, display_labels=["Small Flare", "Big Flare"])
-    # plt.show()
 
+    # plots confusion matricies stratified by each GOES class
     plot_stratified_confusion_matricies(final_model, split_datasets["train"], split_datasets["test"], time_minutes, run_nickname, output_folder)
 
     test_cm = confusion_matrix(split_datasets["test"]["y"], test_predictions)

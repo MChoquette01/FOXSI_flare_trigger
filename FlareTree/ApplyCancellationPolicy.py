@@ -15,23 +15,27 @@ observation is lower, the launch is aborted."""
 
 
 def get_original_and_cancelled_results(test_and_cancellation_results):
-    """Returns GT< original predictions and predictions with cancellation criteria applied."""
+    """Returns GT, original predictions and predictions with cancellation criteria applied."""
 
-    cancelled_y_true, cancelled_y_pred = [], []
-    original_y_true, original_y_pred = [], []
+    cancelled_y_true, cancelled_y_pred = [], []  # info for confusion matrix after cancellation is applied
+    original_y_true, original_y_pred = [], []  # info for confusion matrix before cancellation is applied
     for idx, row in test_and_cancellation_results.iterrows():
-        if int(float(row.GT)) == 0:
+        if int(float(row.GT)) == 0:  # if weak flare...
+            #  ...and predicted as weak OR cancelled (True Negative)
             if int(float(row.Prediction)) == 0 or int(float(row.IsCancelled)) == 1:
                 cancelled_y_true.append(int(float(row.GT)))
                 cancelled_y_pred.append(0)
             else:
+                # ...if predicted as strong AND/OR not cancelled (False Positive)
                 cancelled_y_true.append(int(float(row.GT)))
                 cancelled_y_pred.append(int(float(row.Prediction)))
-        else:
+        else:  # if strong flare in truth
+            # ...if predicted as weak or cancelled (False Negative)
             if int(float(row.Prediction)) == 0 or int(float(row.IsCancelled)) == 1:
                 cancelled_y_true.append(int(float(row.GT)))
                 cancelled_y_pred.append(0)
             else:
+                # ...predicted as strong (True Positive)
                 cancelled_y_true.append(int(float(row.GT)))
                 cancelled_y_pred.append(int(float(row.Prediction)))
         original_y_true.append(int(float(row.GT)))
@@ -41,7 +45,7 @@ def get_original_and_cancelled_results(test_and_cancellation_results):
 
 
 def graph_confusion_matrices(gt, old_preds, new_preds, run_nickname, time_minutes):
-    """Helper function to plot confusion matricies with and without cancellation critieria applied"""
+    """Helper function to plot confusion matricies with and without cancellation criteria applied"""
 
     fig, ax = plt.subplots(1, 2, clear=True)
     fig.set_figwidth(25)
@@ -70,6 +74,7 @@ def graph_confusion_matrices(gt, old_preds, new_preds, run_nickname, time_minute
     plt.tight_layout()
     fig.savefig(os.path.join(results_folderpath, run_nickname, "Cancellation Analysis", "Cancellation Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start.png"))
     # plt.show()
+    # clear/close figures or bad errors happen with too many graphs
     plt.close(fig)
     plt.clf()
     plt.cla()
@@ -79,6 +84,7 @@ def plot_stratified_confusion_matricies(test_and_cancellation_results, time_minu
     """Helper function to plot confusion matricies stratified by true flare class"""
 
     for flare_class in ["B", "<C5", ">=C5", "M", "X"]:
+        # Handle C5 boundary..get flares on right side of C5
         if not "C" in flare_class:
             relevant_indicies = test_and_cancellation_results.index[test_and_cancellation_results.FlareClass.str.startswith(flare_class)].tolist()
         else:
@@ -126,19 +132,24 @@ def plot_stratified_confusion_matricies(test_and_cancellation_results, time_minu
             flare_class = flare_class.replace("<", "Less Than ")
         elif ">=" in flare_class:
             flare_class = flare_class.replace(">=", "Greater Than ")
-        # fig.savefig(os.path.join(results_folderpath, run_nickname, "Cancellation Analysis", "Stratified Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start True Class {flare_class}.png"))
+        fig.savefig(os.path.join(results_folderpath, run_nickname, "Cancellation Analysis", "Stratified Confusion Matrices", f"Confusion Matrix {time_minutes} Minutes Since Start True Class {flare_class}.png"))
         # plt.show()
         plt.close(fig)
         plt.clf()
         plt.cla()
 
 def is_flare_cancelled(flare_id, minutes_since_start, current_xrsa):
+    """Apply cancellation policy: If XRSA decreases during the 3-minute countdown period,
+    abort the launch to preserve launch window."""
 
+    # if no info to make decision, don't conclusively cancel
     if current_xrsa is None:
         return False
+    # get XRSA value three minutes out for the flare. If that value is missing, grab two minutes out as that
+    # value would be extended in realtime use. Repeat until 0 minutes. If all missing, do NOT cancel as there's no enough info.
     client, flares_table = tc.connect_to_flares_db()
     minutes_out = 3
-    complete = False
+    complete = False  # flag when a non-NaN, future XRSA flux value is found
     while not complete:
         cursor = flares_table.find(filter={'FlareID': f'{int(flare_id)}_{minutes_since_start + 15 + minutes_out}'}, projection={'CurrentXRSA': 1})
         for record in cursor:
@@ -146,23 +157,24 @@ def is_flare_cancelled(flare_id, minutes_since_start, current_xrsa):
                 newer_xrsa = record["CurrentXRSA"]
                 if newer_xrsa < current_xrsa:
                     client.close()
-                    return True
-                complete = True
-            else:  # try a timestep earlier, this is what would be used by linear interpolation
+                    return True  # cancelled!
+                complete = True  # if newer XRSA is not less, do NOT cancel, exit loop
+            else:  # if NaN XRSA flux, try a timestep earlier, this is what would be used by linear interpolation
                 minutes_out -= 1
                 if minutes_out == 0:  # no point going earlier than the current timestep
                     client.close()
                     return False
-        else:  # no data? shouldn't happen
+        else:  # no data? shouldn't happen but who knows
             client.close()
             return False
 
 
 def make_cancelled_launch_graph_for_positive_predictions():
-
-    all_results = {}
-    for x in range(-5, 16):
-        all_results[x] = 0
+    """Graph proportion of launches aborted per timestamp."""
+    
+    cancelled_launches = {}  # keep track of how many launches were cancelled at each timestamp
+    for minutes_since_start in range(-5, 16):
+        cancelled_launches[minutes_since_start] = 0
     positive_prediction_flare_ids = {}
     for minutes_since_start in range(-5, 16):
         test_set_results_filepath = os.path.join(results_folderpath, run_nickname, "Scores", f"{minutes_since_start}_minutes_since_start_test_set.csv")
@@ -171,6 +183,7 @@ def make_cancelled_launch_graph_for_positive_predictions():
         positive_prediction_test_ids = [row.FlareID for _, row in positive_test_set_predictions.iterrows()]
         positive_prediction_flare_ids[minutes_since_start] = positive_prediction_test_ids
 
+    # get XRSA flux history for flare
     client, flares_table = tc.connect_to_flares_db()
     for minutes_since_start in range(-5, 16):
         for flare_id in positive_prediction_flare_ids[minutes_since_start]:
@@ -178,12 +191,13 @@ def make_cancelled_launch_graph_for_positive_predictions():
             for record in cursor:
                 current_xrsa = record["CurrentXRSA"]
                 if is_flare_cancelled(flare_id, minutes_since_start, current_xrsa):
-                    all_results[minutes_since_start] += 1
+                    cancelled_launches[minutes_since_start] += 1
     client.close()
-    all_results = dict(sorted(all_results.items()))
-    all_results = [all_results[minutes_since_start] / len(positive_prediction_flare_ids[minutes_since_start]) for minutes_since_start in range(-5, 16)]
+    # reframe results dict as percentages
+    cancelled_launches = dict(sorted(cancelled_launches.items()))
+    cancelled_launches = [cancelled_launches[minutes_since_start] / len(positive_prediction_flare_ids[minutes_since_start]) for minutes_since_start in range(-5, 16)]
     plt.figure(figsize=(16, 9))
-    plt.bar(range(-5, 16), all_results)
+    plt.bar(range(-5, 16), cancelled_launches)
     plt.xticks(ticks=[x for x in range(-5, 16)], labels=[x for x in range(-5, 16)], fontsize=20)
     plt.yticks(fontsize=20)
     plt.ylabel("Proportion of Positive Predictions Cancelled", fontsize=22)
@@ -197,8 +211,9 @@ def analyze_cancellation_changes():
     """Make confusion matricies of before/after cancellation effects applied, for the entire model and stratiified by
     true flare class. Saves images and a CSV of scoring differences."""
 
-    stats = []
+    stats = [] # record precision, recall and F1 before and after cancellation
     client, flares_table = tc.connect_to_flares_db()
+    # get pruned model results and train/test datasets
     for time_minutes in tqdm(range(-5, 16), desc="Analyzing effects of cancellation..."):
         test_set_results_filepath = os.path.join(results_folderpath, run_nickname, "Pruning", "Pruned Scores", f"{time_minutes}_minutes_since_start_test_set.pkl")
         split_datasets_filepath = os.path.join(results_folderpath, run_nickname, "Datasets", f"split_datasets{time_minutes}_minutes_since_start.pkl")
@@ -206,7 +221,7 @@ def analyze_cancellation_changes():
             test_set_results = pickle.load(f)
         with open(split_datasets_filepath, "rb") as f:
             split_datasets = pickle.load(f)
-        launch_cancelled_status = []
+        launch_cancelled_status = []  # record bool for each flare, 1 if cancelled, else 0
         all_additional_data = pd.concat([split_datasets["test"]["additional_data"], split_datasets["test"]["y"]], axis=1)
         for idx, row in all_additional_data.iterrows():
             cursor = client['Flares']['NaiveFlares'].find(filter={'FlareID': f'{int(row.FlareID)}_{time_minutes + 15}'}, projection={'CurrentXRSA': 1})
@@ -222,6 +237,7 @@ def analyze_cancellation_changes():
 
         gt, original_y_pred, cancelled_y_pred = get_original_and_cancelled_results(test_and_cancellation_results)
 
+        # calculate stats from confusion matricies
         old_cm = confusion_matrix(gt, original_y_pred)
         new_cm = confusion_matrix(gt, cancelled_y_pred)
         old_adj_precision = old_cm[1:4, 1:4].sum() / (old_cm[1:4, 1:4].sum() + sum(old_cm[0, 1:4]))
@@ -237,12 +253,12 @@ def analyze_cancellation_changes():
         plot_stratified_confusion_matricies(test_and_cancellation_results, time_minutes, run_nickname)
         graph_confusion_matrices(gt, original_y_pred, cancelled_y_pred, run_nickname, time_minutes)
 
+    # export stats to DataFrame and CSV
     stats = pd.DataFrame(np.array(stats))
     stats.columns = ["MinutesSinceFlareStart", "AdjustedPrecisionWithoutCancellation", "AdjustedPrecisionWithCancellation",
                      "AdjustedPrecisionDifference", "AdjustedRecallWithoutCancellation", "AdjustedRecallWithCancellation",
                      "AdjustedRecallDifference", "AdjustedF1WithoutCancellation", "AdjustedF1WithCancellation", "AdjustedF1Difference"]
     stats.to_csv(os.path.join(results_folderpath, run_nickname, "Cancellation Analysis", "Cancellation Confusion Matrices", "Cancellation Effects.csv"), index=False)
-
 
 
 if __name__ == "__main__":

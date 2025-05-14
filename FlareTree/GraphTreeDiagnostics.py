@@ -21,7 +21,7 @@ def metric_plot_helper(plot_int, train_list, test_list, metric_name):
         plt.plot([x, x], [train_sample, test_sample], color="black")
     plt.scatter(xs, train_metric, color="blue", label="Train")
     plt.scatter(xs, test_metric, color="orange", label="Test")
-    if metric_name != "TSS":
+    if metric_name != "TSS":  # different range
         plt.yticks(ticks=[0, 1], labels=["0", "1"])
     else:
         plt.yticks(ticks=[-1, 0, 1], labels=["-1", "0", "1"])
@@ -52,7 +52,7 @@ def param_plot_helper(plot_int, metric_results, metric_name):
 
 
 def make_metric_plot():
-    """Plot model performance metrics"""
+    """Plot model performance metrics (precision, recall, F1, etc.)"""
 
     plt.figure(figsize=(16, 9))
     metric_plot_helper(231, results.train_precision.to_list(), results.test_precision.to_list(), "Precision")
@@ -84,6 +84,7 @@ def make_param_plot():
 
 
 def graph_nan_frequency(results, peak_filtering_minutes):
+    """Plot the proportion of NaN values for each timestamp"""
 
     plt.clf()
     fig, ax = plt.subplots(1, 2)
