@@ -11,7 +11,9 @@ import matplotlib.pyplot as plt
 
 """Fun functions to see a path a record takes through a tree.
 Pretty shamelessly adapted from here:
-https://stackoverflow.com/questions/57326537/scikit-learn-decision-tree-extract-nodes-for-feature"""
+https://stackoverflow.com/questions/57326537/scikit-learn-decision-tree-extract-nodes-for-feature
+
+Many of these functions will only work for decision trees, not random forests or gradient boosted trees"""
 
 
 def print_tree_structure(t, feature_names):
@@ -170,6 +172,7 @@ def get_path_stats(t, x, y):
 
 
 def get_flare_class():
+    """Return the GOES class for each flare in the MongoDB"""
 
     client, flares_table = tc.connect_to_flares_db()
 
@@ -186,8 +189,10 @@ def get_flare_class():
 
 
 def get_confidence_graph(t, test_x, test_x_additional_flare_data, test_y, minutes_since_start):
+    """Plot histograms showing the confidences in predictions for each target class"""
 
     def confidence_graph_helper(plot_int, test_confidence_values, flare_class_letter):
+        """Graph each subplot (target class)"""
 
         plt.subplot(plot_int)
         plt.xlim(50, 100)
@@ -212,7 +217,7 @@ def get_confidence_graph(t, test_x, test_x_additional_flare_data, test_y, minute
         subset = subset.drop(list(test_x_additional_flare_data.columns) + ["IsStrongFlare"], axis=1)
         test_data_by_class[flare_mag_letter] = {"test_x": subset, "test_y": class_test_y}
 
-
+    # get confidence value for predictions from each class
     test_confidence_values_b = get_path_stats(t, pd.DataFrame(test_data_by_class["B"]['test_x']), pd.DataFrame(test_data_by_class["B"]['test_y']))
     test_confidence_values_c = get_path_stats(t, pd.DataFrame(test_data_by_class["C"]['test_x']), pd.DataFrame(test_data_by_class["C"]['test_y']))
     test_confidence_values_m = get_path_stats(t, pd.DataFrame(test_data_by_class["M"]['test_x']), pd.DataFrame(test_data_by_class["M"]['test_y']))

@@ -10,8 +10,8 @@ import pickle
 
 """Common utilities for decision trees"""
 
-RANDOM_STATE = 102024
-LAUNCH_TIME_MINUTES = 8
+RANDOM_STATE = 102024  # just the date I wrote this :)
+LAUNCH_TIME_MINUTES = 8  # 3 minute XRS data latency + 3 minute countdown + 2 minute travel time
 OBSERVATION_TIME_MINUTES = 6
 
 
@@ -26,7 +26,7 @@ def connect_to_flares_db(use_naive=False):
 
 
 def get_temporal_test_set_flare_ids(client, parsed_flares_dir, time_minutes):
-
+    """Returns IDs of flares from teh temporal test set, not used in individual model training/testing"""
     temporal_test_set_flare_ids = []
     for flare_class in ["B", "<C", ">=C5", "M", "X"]:
         this_flare_class_ids = []

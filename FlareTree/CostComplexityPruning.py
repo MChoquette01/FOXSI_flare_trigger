@@ -11,9 +11,12 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
+"""Evaluates a grid search of alpha values for CCP. Saves results for later analysis.
+What is Cost Complexity Pruning? See here: https://scikit-learn.org/stable/auto_examples/tree/plot_cost_complexity_pruning.html"""
+
 
 def graph_confusion_matrices(gt, old_preds, new_preds, results_folderpath, run_nickname, time_minutes):
-    """Helper function to plot confusion matricies with and without cancellation critieria applied"""
+    """Helper function to plot confusion matricies with and without pruning applied"""
 
     fig, ax = plt.subplots(1, 2, clear=True)
     fig.set_figwidth(30)
@@ -24,6 +27,7 @@ def graph_confusion_matrices(gt, old_preds, new_preds, results_folderpath, run_n
     ax[1].tick_params(axis='both', which='major', labelsize=22)
     plt.rcParams.update({'font.size': 24})
 
+    # sklearn will only show labels for classes that are used
     old_display_labels = [f"C, <C5", f"C, >=C5", f"M", f"X"][:len(list(set(gt + old_preds)))]
     new_display_labels = [f"C, <C5", f"C, >=C5", f"M", f"X"][:len(list(set(gt + new_preds)))]
 
@@ -56,27 +60,29 @@ def make_dir_safe(folder_path):
         pass
 
 def adj_precision(cm):
+    """Calculate adjusted precision"""
     tp = cm[1:4, 1:4].sum()
     fp = sum(cm[0, 1:4])
     return tp / (tp + fp)
 
 
 def adj_recall(cm):
-
+    """Calculate adjusted recall"""
     tp = cm[1:4, 1:4].sum()
     fn = sum(cm[1:4, 0])
     return tp / (tp + fn)
 
 
 def adj_f1(adj_p, adj_r):
-
+    """Calculate adjusted F1 score"""
     return (2 * adj_p * adj_r) / (adj_p + adj_r)
 
 
 def ccp_alpha_prune(run_nickname, model_type, minutes_since_start):
-
+    """Run a small grid search to find an optimal alpha value to CCP prune trees"""
     results_folderpath = r"Results"
 
+    # create output folders
     out_dir = os.path.join(results_folderpath, run_nickname, "Pruning")
     graphs_dir = os.path.join(results_folderpath, run_nickname, "Pruning", "Pruning Confusion Matrices")
     models_dir = os.path.join(results_folderpath, run_nickname, "Pruning", "Pruned Models")
@@ -102,6 +108,7 @@ def ccp_alpha_prune(run_nickname, model_type, minutes_since_start):
     with open(split_datasets_filepath, "rb") as f:
         split_datasets = pickle.load(f)
 
+    # alpha values to test
     ccp_alphas = [1*10**-3, 2.5*10**-3, 5*10**-3, 7.5*10**-3,
                   1*10**-4, 2.5*10**-4, 5*10**-4, 7.5*10**-4,
                   1*10**-5, 2.5*10**-5, 5*10**-5, 7.5*10**-5,
@@ -110,9 +117,11 @@ def ccp_alpha_prune(run_nickname, model_type, minutes_since_start):
                   1*10**-8, 2.5*10**-8, 5*10**-8, 7.5*10**-8,
                   1*10**-9, 2.5*10**-9, 5*10**-9, 7.5*10**-9]
 
+    # initialize
     best_ccp_alpha = -1
     best_adj_precision = -1
     best_model = None
+    # test all alphas, retrain and test with each
     for ccp_alpha in tqdm(ccp_alphas):
         if model_type == "Gradient Boosted Tree":
             new_model = GradientBoostingClassifier(loss=trained_tree.loss,
@@ -207,6 +216,7 @@ if __name__ == "__main__":
         parser.add_argument("-n", type=str, help="Run nickname")
         parser.add_argument("-m", type=str, help="Model Type")
         args = parser.parse_args()
+        # if running locally and not a supercomputer, lower 21 to 3 or 4 (number of cores to use)
         with Pool(21) as p:
             p.starmap(ccp_alpha_prune, zip(repeat(args.n), repeat(args.m), range(-5, 16)))
 

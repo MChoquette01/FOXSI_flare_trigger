@@ -3,6 +3,7 @@ import os
 from sklearn.inspection import PartialDependenceDisplay
 from sklearn.inspection import partial_dependence
 import matplotlib.pyplot as plt
+from itertools import permutations
 
 """Plot Partial Dependency Plots for the two most important variables in each model
 'What the heck is a PDP, you say? It shows the effect of one or two predictors on the predicted class!
@@ -41,6 +42,15 @@ for minutes_since_start in range(-5, 16):
 
     with open(split_datasets_path, 'rb') as f:
         split_datasets = pickle.load(f)
+
+    for features in range(len(params)):
+
+        for target_idx in [1]:
+            try:
+                PartialDependenceDisplay.from_estimator(model, split_datasets['train']['x'], [features], target=target_idx)
+            except ValueError:
+                continue
+            plt.show()
 
     features = [params.index(feature_importances[-1][0]), params.index(feature_importances[-2][0]), (params.index(feature_importances[-1][0]), params.index(feature_importances[-2][0]))]
     fig, ax = plt.subplots(2, 2, figsize=(16, 9))

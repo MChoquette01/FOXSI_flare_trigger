@@ -6,7 +6,8 @@ import numpy as np
 import os
 
 
-# GUI to tweak tree hyperparameters to visualize how classifications results/scores change
+# GUI to tweak tree hyperparameters to visualize how classifications results/scores change.
+# GOod for decision trees, not Random Forests or Gradient Boosted Trees.
 
 def get_metrics(t, train_x, train_y, test_x, test_y):
 
